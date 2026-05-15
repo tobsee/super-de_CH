@@ -7,9 +7,10 @@
 # The next line disables specific ShellCheck codes (https://github.com/koalaman/shellcheck) for the entire script.
 # shellcheck disable=SC2012,SC2024,SC2207
 
-SUPER_VERSION="5.1.0-rc4"
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+SUPER_VERSION="5.1.0-rc5"
 readonly SUPER_VERSION
-SUPER_DATE="2026/02/20"
+SUPER_DATE="2026/05/15"
 readonly SUPER_DATE
 SUPER_USER_AGENT="super/${SUPER_VERSION} $(curl --version | head -1 | sed -e 's/curl /curl\//')"
 readonly SUPER_USER_AGENT
@@ -237,6 +238,8 @@ show_usage() {
   <key>ConfigTempOverride</key> <true/> | <false/>
   <key>AuthAskUserToSavePassword</key> <true/> | <false/>
   <key>AuthJamfCustomURL</key> <string>URL</string>
+  <key>AuthJamfComputerID</key> <string>$JSSID</string>
+  <key>AuthJamfManagementID</key> <string>$MANAGEMENTID</string>
   <key>AuthCredentialFailoverToUser</key> <true/> | <false/>
   <key>AuthMDMFailoverToUser</key>
   <string>ALWAYS,DIALOG,DEADLINE,SCHEDULED,INSTALLNOW,ERROR</string>
@@ -294,7 +297,7 @@ show_config_status() {
 	[[ "${macos_msu_downloaded_version}" == "FALSE" ]] && echo "Config Status: Mac softwareupdate system cache is empty (no downloaded macOS update/upgrade)."
 	[[ "${macos_msu_downloaded_version}" != "FALSE" ]] && echo "Config Status: Mac softwareupdate system cache is macOS ${macos_msu_downloaded_version}-${macos_msu_downloaded_build}."
 	local super_previous_pid
-	super_previous_pid=$(pgrep -F "${SUPER_PID_FILE}" 2>/dev/null)
+	super_previous_pid=$(pgrep -F "${SUPER_PID_FILE}" 2> /dev/null)
 	local super_launch_daemon_active
 	[[ $(launchctl print "system/${SUPER_LAUNCH_DAEMON_LABEL}" 2>&1 | grep -c "system/${SUPER_LAUNCH_DAEMON_LABEL}") -gt 0 ]] && super_launch_daemon_active="TRUE"
 	if [[ -n "${super_previous_pid}" ]]; then
@@ -387,7 +390,7 @@ show_config_status() {
 	fi
 	
 	local system_profiler_install_history_json
-	system_profiler_install_history_json=$(system_profiler SPInstallHistoryDataType -json)
+	system_profiler_install_history_json=$(system_profiler SPInstallHistoryDataType -json 2> /dev/null)
 	if [[ $(echo "${system_profiler_install_history_json}" | grep -c '_name') -ge 1 ]]; then
 		echo -e "\n**** Config Status: Installation history of macOS system updates:"
 		echo "${system_profiler_install_history_json}" | grep -e '_name' -e 'install_date' | awk -F '"' '{print $4}' | tr '\n' ',' | sed -e 's/Z,/\n/g' -e 's/,/\t/g' | grep -e 'macOS'
@@ -682,6 +685,8 @@ set_defaults() {
 	readonly REGEX_ANY_WHOLE_NUMBER
 	REGEX_CSV_WHOLE_NUMBERS="^[0-9*,]+$"
 	readonly REGEX_CSV_WHOLE_NUMBERS
+	REGEX_VALID_UUID="^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+	readonly REGEX_VALID_UUID
 	REGEX_HOURS_MINUTES="^(2[0-3]|[01][0-9]):[0-5][0-9]$"
 	readonly REGEX_HOURS_MINUTES
 	REGEX_DATE_HOURS_MINUTES="^[0-9][0-9][0-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1]):(2[0-3]|[01][0-9]):[0-5][0-9]$"
@@ -1136,15 +1141,15 @@ set_pref() {
 
 # Delete a preference by name ${1} from the main ${SUPER_MAIN_PLIST}.
 delete_pref_main() {
-	defaults delete "${SUPER_MAIN_PLIST}" "${1}" 2>/dev/null
+	defaults delete "${SUPER_MAIN_PLIST}" "${1}" 2> /dev/null
 }
 
 # Delete a preference by name ${1} from either the current ${super_alternate_plist} or the ${SUPER_MAIN_PLIST}.
 delete_pref() {
 	if [[ -n "${super_alternate_plist}" ]]; then
-		defaults delete "${super_alternate_plist}" "${1}" 2>/dev/null
+		defaults delete "${super_alternate_plist}" "${1}" 2> /dev/null
 	else
-		defaults delete "${SUPER_MAIN_PLIST}" "${1}" 2>/dev/null
+		defaults delete "${SUPER_MAIN_PLIST}" "${1}" 2> /dev/null
 	fi
 }
 
@@ -1153,16 +1158,16 @@ get_pref_managed() {
 	local preference_result
 	local preference_source
 	if [[ -f "${SUPER_MANAGED_PLIST}.plist" ]] && [[ -n "${alternate_temporary_plist}" ]] && [[ "${config_temp_override}" == "TRUE" ]]; then
-		preference_result=$(defaults read "${super_alternate_plist}" "${1}" 2>/dev/null)
+		preference_result=$(defaults read "${super_alternate_plist}" "${1}" 2> /dev/null)
 		[[ -n "${preference_result}" ]] && preference_source="${super_alternate_plist}"
 	fi
 	if [[ -f "${SUPER_MANAGED_PLIST}.plist" ]] && [[ -z "${preference_result}" ]]; then
-		preference_result=$(defaults read "${SUPER_MANAGED_PLIST}" "${1}" 2>/dev/null)
+		preference_result=$(defaults read "${SUPER_MANAGED_PLIST}" "${1}" 2> /dev/null)
 		[[ -n "${preference_result}" ]] && preference_source="${SUPER_MANAGED_PLIST}"
 	fi
 	if [[ -n "${preference_result}" ]]; then
 		local preference_type
-		preference_type=$(defaults read-type "${preference_source}" "${1}" 2>/dev/null)
+		preference_type=$(defaults read-type "${preference_source}" "${1}" 2> /dev/null)
 		if [[ $(echo "${preference_type}" | grep -c 'boolean') -gt 0 ]]; then
 			{ [[ "${preference_result}" == "0" ]] || [[ "${preference_result}" == "FALSE" ]]; } && echo "FALSE" && return 0
 			{ [[ "${preference_result}" == "1" ]] || [[ "${preference_result}" == "TRUE" ]]; } && echo "TRUE" && return 0
@@ -1176,12 +1181,12 @@ get_pref_managed() {
 # Gets the value of a preference by name ${1}. This searches for values in ${super_alternate_plist}, and ${SUPER_MAIN_PLIST}. The first found in this order is returned.
 get_pref() {
 	local preference_result
-	[[ -n "${super_alternate_plist}" ]] && preference_result=$(defaults read "${super_alternate_plist}" "${1}" 2>/dev/null)
-	[[ -z "${preference_result}" ]] && preference_result=$(defaults read "${SUPER_MAIN_PLIST}" "${1}" 2>/dev/null)
+	[[ -n "${super_alternate_plist}" ]] && preference_result=$(defaults read "${super_alternate_plist}" "${1}" 2> /dev/null)
+	[[ -z "${preference_result}" ]] && preference_result=$(defaults read "${SUPER_MAIN_PLIST}" "${1}" 2> /dev/null)
 	if [[ -n "${preference_result}" ]]; then
 		local preference_type
-		[[ -n "${super_alternate_plist}" ]] && preference_type=$(defaults read-type "${super_alternate_plist}" "${1}" 2>/dev/null)
-		[[ -z "${preference_type}" ]] && preference_type=$(defaults read-type "${SUPER_MAIN_PLIST}" "${1}" 2>/dev/null)
+		[[ -n "${super_alternate_plist}" ]] && preference_type=$(defaults read-type "${super_alternate_plist}" "${1}" 2> /dev/null)
+		[[ -z "${preference_type}" ]] && preference_type=$(defaults read-type "${SUPER_MAIN_PLIST}" "${1}" 2> /dev/null)
 		if [[ $(echo "${preference_type}" | grep -c 'boolean') -gt 0 ]]; then
 			{ [[ "${preference_result}" == "0" ]] || [[ "${preference_result}" == "FALSE" ]]; } && echo "FALSE" && return 0
 			{ [[ "${preference_result}" == "1" ]] || [[ "${preference_result}" == "TRUE" ]]; } && echo "TRUE" && return 0
@@ -1235,17 +1240,17 @@ manage_preference_resets() {
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_legacy_jamf_account_backup: ${auth_legacy_jamf_account_backup}"
 	
 		# Delete and/or reset locally saved items.
-		defaults delete "${SUPER_MAIN_PLIST}" >/dev/null 2>&1
+		defaults delete "${SUPER_MAIN_PLIST}" > /dev/null 2>&1
 		set_pref_main "SuperVersion" "${SUPER_VERSION}"
-		defaults read "${SUPER_MAIN_PLIST}" >/dev/null 2>&1
-		rm -f "${SUPER_FOLDER}/.WorkflowInstallNow" 2>/dev/null # This is cleaning up a legacy item.
-		rm -f "${SUPER_FOLDER}/.WorkflowRestartValidate" 2>/dev/null # This is cleaning up a legacy item.
-		rm -r "${SUPER_FOLDER}/icon.png" 2>/dev/null # This is cleaning up a legacy item.
-		rm -r "${DISPLAY_ICON_LIGHT_FILE_CACHE}" 2>/dev/null
-		rm -r "${DISPLAY_ICON_DARK_FILE_CACHE}" 2>/dev/null
+		defaults read "${SUPER_MAIN_PLIST}" > /dev/null 2>&1
+		rm -f "${SUPER_FOLDER}/.WorkflowInstallNow" 2> /dev/null # This is cleaning up a legacy item.
+		rm -f "${SUPER_FOLDER}/.WorkflowRestartValidate" 2> /dev/null # This is cleaning up a legacy item.
+		rm -r "${SUPER_FOLDER}/icon.png" 2> /dev/null # This is cleaning up a legacy item.
+		rm -r "${DISPLAY_ICON_LIGHT_FILE_CACHE}" 2> /dev/null
+		rm -r "${DISPLAY_ICON_DARK_FILE_CACHE}" 2> /dev/null
 		check_software_status_required="TRUE" # This will trigger the reset_software_update_status() function.
-		rm -f "${SOFA_MACOS_JSON_ETAG_CACHE}" 2>/dev/null
-		rm -f "${SOFA_MACOS_JSON_CACHE}" 2>/dev/null
+		rm -f "${SOFA_MACOS_JSON_ETAG_CACHE}" 2> /dev/null
+		rm -f "${SOFA_MACOS_JSON_CACHE}" 2> /dev/null
 		[[ "${verbose_mode}" == "TRUE" ]] && set_pref_main "VerboseMode" "TRUE"
 	
 		# Restore any saved preferences from backup.
@@ -1314,7 +1319,7 @@ manage_preference_resets() {
 		log_super_audit "Status: Deleting all workflow configurations in ${SUPER_CONFIGS_FOLDER}."
 		for delete_alt_plist in "${SUPER_CONFIGS_FOLDER:?}"/*; do
 			log_super_audit "Status: Deleting alternate workflow configuration ${delete_alt_plist}."
-			rm -Rf "${delete_alt_plist}" >/dev/null 2>&1
+			rm -Rf "${delete_alt_plist}" > /dev/null 2>&1
 		done
 		if [[ -n "${alternate_default_plist}" ]]; then
 			log_super_audit "Status: Workflow is no longer using deleted alternate default configuration at ${alternate_default_plist}.plist."
@@ -1329,7 +1334,7 @@ manage_preference_resets() {
 	elif [[ -n "${config_delete_option}" ]]; then # Only deleting an individual alternate plist.
 		if [[ -f "${SUPER_CONFIGS_FOLDER}/com.macjutsu.super.${config_delete_option}.plist" ]]; then
 			log_super_audit "Status: Deleting alternate workflow configuration ${SUPER_CONFIGS_FOLDER}/com.macjutsu.super.${config_delete_option}.plist."
-			rm -Rf "${SUPER_CONFIGS_FOLDER:?}/com.macjutsu.super.${config_delete_option}.plist" >/dev/null 2>&1
+			rm -Rf "${SUPER_CONFIGS_FOLDER:?}/com.macjutsu.super.${config_delete_option}.plist" > /dev/null 2>&1
 		else
 			log_super "Error: Unable to locate alternate workflow configuration for deletion at ${SUPER_CONFIGS_FOLDER}/com.macjutsu.super.${config_delete_option}.plist."
 		fi
@@ -1364,8 +1369,8 @@ manage_parameter_options() {
 	[[ -z "${config_code_signature}" ]] && config_code_signature="FALSE"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_code_signature is: ${config_code_signature}"
 	[[ -f "${SUPER_MANAGED_PLIST}.plist" ]] && log_super "Status: Active managed workflow configuration located at ${SUPER_MANAGED_PLIST}.plist."
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Managed preference file: ${SUPER_MANAGED_PLIST}:\n$(defaults read "${SUPER_MANAGED_PLIST}" 2>/dev/null)"
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file before startup validation: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2>/dev/null)"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Managed preference file: ${SUPER_MANAGED_PLIST}:\n$(defaults read "${SUPER_MANAGED_PLIST}" 2> /dev/null)"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file before startup validation: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2> /dev/null)"
 	
 	# First handle incompatible combinations of alternate config options.
 	{ [[ "${config_edit_main_option}" == "TRUE" ]] && [[ -n "${config_edit_option}" ]]; } && log_super "Parameter Error: You can not use both the --config-edit-main and the --config-edit=ConfigurationName options a the same time. Instead, use multiple seperate runs of super for each configuration you want to edit." && parameter_error="TRUE"
@@ -1384,9 +1389,9 @@ manage_parameter_options() {
 				log_super_audit "Status: Cloning workflow configuration ${config_clone_option} to new alternate preferences at ${super_alternate_plist}.plist."
 			else
 				log_super_audit "Status: Cloning workflow configuration ${config_clone_option} to replace alternate preferences at ${super_alternate_plist}.plist."
-				rm -Rf "${SUPER_CONFIGS_FOLDER:?}/com.macjutsu.super.${config_edit_option}.plist" >/dev/null 2>&1
+				rm -Rf "${SUPER_CONFIGS_FOLDER:?}/com.macjutsu.super.${config_edit_option}.plist" > /dev/null 2>&1
 			fi
-			cp "${alternate_clone_plist}.plist" "${super_alternate_plist}.plist" >/dev/null 2>&1
+			cp "${alternate_clone_plist}.plist" "${super_alternate_plist}.plist" > /dev/null 2>&1
 			set_pref "ConfigEditTimestamp" "$(date +%Y-%m-%d:%H:%M:%S)"
 		else
 			log_super "Parameter Error: Unable to clone workflow configuration because the preferences could not be located at ${alternate_clone_plist}.plist."
@@ -1517,7 +1522,7 @@ manage_parameter_options() {
 		fi
 	fi
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: super_alternate_plist is: ${super_alternate_plist}"
-	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n "${super_alternate_plist}" ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Alternate preference file before startup validation: ${super_alternate_plist}:\n$(defaults read "${super_alternate_plist}" 2>/dev/null)"
+	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n "${super_alternate_plist}" ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Alternate preference file before startup validation: ${super_alternate_plist}:\n$(defaults read "${super_alternate_plist}" 2> /dev/null)"
 	
 	# Validate ${install_macos_minor_version_target_option} and if a valid set the ${install_macos_minor_version_target} parameter.
 	install_macos_minor_version_target=$(get_pref_managed "InstallMacOSMinorVersionTarget")
@@ -1542,7 +1547,7 @@ manage_parameter_options() {
 		unset install_macos_minor_version_target
 		unset install_macos_minor_version_normalized_target
 	elif [[ -n $install_macos_minor_version_normalized_target ]] && [[ $install_macos_minor_version_normalized_target -le $macos_version_normalized ]]; then
-		[[ $install_macos_minor_version_normalized_target -lt $macos_version_normalized ]] && log_super "Parameter Warning: The --install-macos-minor-version-target=${install_macos_minor_version_target} option is less than current ${macos_version_full}. Disabling macOS minor update workflow."
+		[[ $install_macos_minor_version_normalized_target -lt $macos_version_normalized ]] && log_super "Parameter Warning: The --install-macos-minor-version-target=${install_macos_minor_version_target} option is less than currently running ${macos_version_full}. Disabling macOS minor update workflow."
 		[[ $install_macos_minor_version_normalized_target -eq $macos_version_normalized ]] && log_super "Status: The --install-macos-minor-version-target=${install_macos_minor_version_target} option is the same as current ${macos_version_full}. Disabling macOS minor update workflow."
 		install_macos_minor_updates="FALSE"
 	fi
@@ -1571,7 +1576,7 @@ manage_parameter_options() {
 	
 	# Validate the ${install_macos_major_upgrades} and ${install_macos_major_version_normalized_target} as compared to the current macOS ${macos_version_normalized}.
 	if [[ "${install_macos_major_upgrades}" == "TRUE" ]] && [[ -n $install_macos_major_version_normalized_target ]] && [[ $install_macos_major_version_normalized_target -le $macos_version_normalized ]]; then
-		[[ $install_macos_major_version_normalized_target -lt $macos_version_normalized ]] && log_super "Parameter Warning: The --install-macos-major-version-target=${install_macos_major_version_target} option is less than current ${macos_version_full}. Disabling macOS major upgrade workflow."
+		[[ $install_macos_major_version_normalized_target -lt $macos_version_normalized ]] && log_super "Parameter Warning: The --install-macos-major-version-target=${install_macos_major_version_target} option is less than the currently running ${macos_version_full}. Disabling macOS major upgrade workflow."
 		[[ $install_macos_major_version_normalized_target -eq $macos_version_normalized ]] && log_super "Status: The --install-macos-major-version-target=${install_macos_major_version_target} option is the same as current ${macos_version_full}. Disabling macOS major upgrade workflow."
 		install_macos_major_upgrades="FALSE"
 	fi
@@ -1714,6 +1719,7 @@ manage_parameter_options() {
 				deferral_timer_menu_minutes_array[array_index]=10080
 			fi
 		done
+		deferral_timer_menu_minutes=$(echo "${deferral_timer_menu_minutes_array[*]}" | tr ',' '\n' | sort -n -u | paste -sd ',' -)
 		IFS="${previous_ifs}"
 	fi
 	{ [[ -n "${deferral_timer_menu_minutes}" ]] && [[ ! "${deferral_timer_menu_minutes}" =~ ${REGEX_CSV_WHOLE_NUMBERS} ]]; } && log_super "Parameter Error: The --deferral-timer-menu=minutes,minutes,etc... value must only contain numbers and commas (no spaces)." && parameter_error="TRUE"
@@ -2003,6 +2009,7 @@ manage_parameter_options() {
 				scheduled_install_reminder_minutes_array[array_index]=10080
 			fi
 		done
+		scheduled_install_reminder_minutes=$(echo "${scheduled_install_reminder_minutes_array[*]}" | tr ',' '\n' | sort -n -r -u | paste -sd ',' -)
 		IFS="${previous_ifs}"
 	fi
 	{ [[ -n "${scheduled_install_reminder_minutes}" ]] && [[ ! "${scheduled_install_reminder_minutes}" =~ ${REGEX_CSV_WHOLE_NUMBERS} ]]; } && log_super "Parameter Error: The --scheduled-install-reminder=minutes,minutes,etc... value must only contain numbers and commas (no spaces)." && parameter_error="TRUE"
@@ -2937,7 +2944,7 @@ manage_authentication_options() {
 	# If the user specified any new Apple silicon authentication option or the ${auth_delete_all_option} then delete any previously saved credentials.
 	if [[ "${auth_user_account_saved}" == "TRUE" ]] && { [[ "${auth_ask_user_to_save_password}" == "FALSE" ]] || [[ -n "${auth_local_account_option}" ]] || [[ -n "${auth_service_add_via_admin_account_option}" ]] || [[ -n "${auth_jamf_client_option}" ]] || [[ -n "${auth_jamf_account_option}" ]] || [[ "${auth_delete_all_option}" == "TRUE" ]]; }; then
 		log_super_audit "Status: Deleting saved credentials for the --auth-ask-user-to-save-password option."
-		launchctl asuser "${current_user_id}" sudo -u "${current_user_account_name}" security delete-generic-password -a "super_auth_user_password" "/Users/${current_user_account_name}/Library/Keychains/login.keychain" >/dev/null 2>&1
+		launchctl asuser "${current_user_id}" sudo -u "${current_user_account_name}" security delete-generic-password -a "super_auth_user_password" "/Users/${current_user_account_name}/Library/Keychains/login.keychain" > /dev/null 2>&1
 		delete_pref_main "AuthAskUserToSavePassword"
 		auth_ask_user_to_save_password="FALSE"
 		auth_user_account_saved="FALSE"
@@ -2945,51 +2952,51 @@ manage_authentication_options() {
 	if [[ "${auth_ask_user_to_save_password}" == "TRUE" ]] || [[ -n "${auth_local_account_option}" ]] || [[ -n "${auth_service_add_via_admin_account_option}" ]] || [[ -n "${auth_jamf_client_option}" ]] || [[ -n "${auth_jamf_account_option}" ]] || [[ "${auth_delete_all_option}" == "TRUE" ]]; then
 		if [[ "${auth_local_account_saved}" == "TRUE" ]]; then
 			log_super_audit "Status: Deleting saved credentials for the --auth-local-account option."
-			security delete-generic-password -a "super_auth_local_account" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			security delete-generic-password -a "super_auth_local_password" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+			security delete-generic-password -a "super_auth_local_account" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			security delete-generic-password -a "super_auth_local_password" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			delete_pref_main "AuthLocalAccount"
 			auth_local_account_saved="FALSE"
 		fi
 		if [[ "${auth_service_account_saved}" == "TRUE" ]]; then
 			log_super_audit "Status: Deleting the super service account and saved credentials."
-			auth_service_account_keychain=$(security find-generic-password -w -a "super_auth_service_account" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
-			sysadminctl -deleteUser "${auth_service_account_keychain}" >/dev/null 2>&1
-			security delete-generic-password -a "super_auth_service_account" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			security delete-generic-password -a "super_auth_service_password" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+			auth_service_account_keychain=$(security find-generic-password -w -a "super_auth_service_account" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
+			sysadminctl -deleteUser "${auth_service_account_keychain}" > /dev/null 2>&1
+			security delete-generic-password -a "super_auth_service_account" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			security delete-generic-password -a "super_auth_service_password" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			delete_pref_main "AuthServiceAccount"
 			auth_service_account_saved="FALSE"
 		fi
 		if [[ "${auth_jamf_client_saved}" == "TRUE" ]]; then
 			log_super_audit "Status: Deleting saved credentials for the --auth-jamf-client option."
-			security delete-generic-password -a "super_auth_jamf_client" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			security delete-generic-password -a "super_auth_jamf_secret" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+			security delete-generic-password -a "super_auth_jamf_client" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			security delete-generic-password -a "super_auth_jamf_secret" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			delete_pref_main "AuthJamfClient"
 			auth_jamf_client_saved="FALSE"
 		fi
 		if [[ "${auth_jamf_account_saved}" == "TRUE" ]]; then
 			log_super_audit "Status: Deleting saved credentials for the --auth-jamf-account option."
-			security delete-generic-password -a "super_auth_jamf_account" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			security delete-generic-password -a "super_auth_jamf_password" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+			security delete-generic-password -a "super_auth_jamf_account" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			security delete-generic-password -a "super_auth_jamf_password" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			delete_pref_main "AuthJamfAccount"
 			auth_jamf_account_saved="FALSE"
 		fi
 		if [[ -n "${auth_legacy_local_account_saved}" ]]; then
 			log_super_audit "Status: Deleting saved credentials for legacy local account."
 			delete_pref_main "LocalAccount"
-			security delete-generic-password -a "${auth_legacy_local_account_saved}" -s "Super Local Account" /Library/Keychains/System.keychain >/dev/null 2>&1
+			security delete-generic-password -a "${auth_legacy_local_account_saved}" -s "Super Local Account" /Library/Keychains/System.keychain > /dev/null 2>&1
 			unset auth_legacy_local_account_saved
 		fi
 		if [[ -n "${auth_legacy_super_account_saved}" ]]; then
 			log_super_audit "Status: Deleting local account and saved credentials for legacy super service account."
-			sysadminctl -deleteUser "${auth_legacy_super_account_saved}" >/dev/null 2>&1
+			sysadminctl -deleteUser "${auth_legacy_super_account_saved}" > /dev/null 2>&1
 			delete_pref_main "SuperAccount"
-			security delete-generic-password -a "${auth_legacy_super_account_saved}" -s "Super Service Account" /Library/Keychains/System.keychain >/dev/null 2>&1
+			security delete-generic-password -a "${auth_legacy_super_account_saved}" -s "Super Service Account" /Library/Keychains/System.keychain > /dev/null 2>&1
 			unset auth_legacy_super_account_saved
 		fi
 		if [[ -n "${auth_legacy_jamf_account_saved}" ]]; then
 			log_super_audit "Status: Deleting saved credentials for legacy Jamf Pro API account."
 			delete_pref_main "JamfAccount"
-			security delete-generic-password -a "${auth_legacy_jamf_account_saved}" -s "Super MDM Account" /Library/Keychains/System.keychain >/dev/null 2>&1
+			security delete-generic-password -a "${auth_legacy_jamf_account_saved}" -s "Super MDM Account" /Library/Keychains/System.keychain > /dev/null 2>&1
 			unset auth_legacy_jamf_account_saved
 		fi
 	fi
@@ -2999,7 +3006,7 @@ manage_authentication_options() {
 	if [[ -n "${auth_legacy_local_account_saved}" ]]; then
 		log_super_audit "Status: Migrating saved legacy local account credentials..."
 		local auth_legacy_local_password_saved
-		auth_legacy_local_password_saved=$(security find-generic-password -w -a "${auth_legacy_local_account_saved}" -s "Super Local Account" /Library/Keychains/System.keychain 2>/dev/null)
+		auth_legacy_local_password_saved=$(security find-generic-password -w -a "${auth_legacy_local_account_saved}" -s "Super Local Account" /Library/Keychains/System.keychain 2> /dev/null)
 		if [[ -n "${auth_legacy_local_password_saved}" ]]; then
 			auth_local_account_option="${auth_legacy_local_account_saved}"
 			auth_local_password_option="${auth_legacy_local_password_saved}"
@@ -3013,7 +3020,7 @@ manage_authentication_options() {
 	if [[ -n "${auth_legacy_super_account_saved}" ]]; then
 		log_super_audit "Status: Migrating saved legacy super service account credentials..."
 		local auth_legacy_super_password_saved
-		auth_legacy_super_password_saved=$(security find-generic-password -w -a "${auth_legacy_super_account_saved}" -s "Super Service Account" /Library/Keychains/System.keychain 2>/dev/null)
+		auth_legacy_super_password_saved=$(security find-generic-password -w -a "${auth_legacy_super_account_saved}" -s "Super Service Account" /Library/Keychains/System.keychain 2> /dev/null)
 		if [[ -n "${auth_legacy_super_password_saved}" ]]; then
 			auth_service_account="${auth_legacy_super_account_saved}"
 			auth_service_password="${auth_legacy_super_password_saved}"
@@ -3027,7 +3034,7 @@ manage_authentication_options() {
 	if [[ -n "${auth_legacy_jamf_account_saved}" ]]; then
 		log_super_audit "Status: Migrating saved legacy Jamf Pro API account credentials..."
 		local auth_legacy_jamf_password_saved
-		auth_legacy_jamf_password_saved=$(security find-generic-password -w -a "${auth_legacy_jamf_account_saved}" -s "Super MDM Account" /Library/Keychains/System.keychain 2>/dev/null)
+		auth_legacy_jamf_password_saved=$(security find-generic-password -w -a "${auth_legacy_jamf_account_saved}" -s "Super MDM Account" /Library/Keychains/System.keychain 2> /dev/null)
 		if [[ -n "${auth_legacy_jamf_password_saved}" ]]; then
 			auth_jamf_account_option="${auth_legacy_jamf_account_saved}"
 			auth_jamf_password_option="${auth_legacy_jamf_password_saved}"
@@ -3067,23 +3074,23 @@ manage_authentication_options() {
 	
 		# If the ${auth_local_account_option} and ${auth_local_password_option} are valid then save credentials to keychain and then validate retrieval by setting ${auth_local_account_keychain} and ${auth_local_password_keychain}.
 		if [[ "${auth_error_new}" != "TRUE" ]]; then
-			security add-generic-password -a "super_auth_local_account" -s "Super Update Service" -w "$(echo "${auth_local_account_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			auth_local_account_keychain=$(security find-generic-password -w -a "super_auth_local_account" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+			security add-generic-password -a "super_auth_local_account" -s "Super Update Service" -w "$(echo "${auth_local_account_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			auth_local_account_keychain=$(security find-generic-password -w -a "super_auth_local_account" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 			if [[ "${auth_local_account_option}" != "${auth_local_account_keychain}" ]]; then
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_local_account_option is: ${auth_local_account_option}"
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_local_account_keychain is: ${auth_local_account_keychain}"
 				log_super "Auth Error: Unable to validate keychain item for --auth-local-account, deleting keychain item."
 				auth_error_new="TRUE"
-				security delete-generic-password -a "super_auth_local_account" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+				security delete-generic-password -a "super_auth_local_account" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			fi
-			security add-generic-password -a "super_auth_local_password" -s "Super Update Service" -w "$(echo "${auth_local_password_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			auth_local_password_keychain=$(security find-generic-password -w -a "super_auth_local_password" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+			security add-generic-password -a "super_auth_local_password" -s "Super Update Service" -w "$(echo "${auth_local_password_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			auth_local_password_keychain=$(security find-generic-password -w -a "super_auth_local_password" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 			if [[ "${auth_local_password_option}" != "${auth_local_password_keychain}" ]]; then
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_local_password_option is: ${auth_local_password_option}"
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_local_password_keychain is: ${auth_local_password_keychain}"
 				log_super "Auth Error: Unable to validate keychain item for --auth-local-password, deleting keychain item."
 				auth_error_new="TRUE"
-				security delete-generic-password -a "super_auth_local_password" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+				security delete-generic-password -a "super_auth_local_password" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			fi
 		fi
 		
@@ -3109,7 +3116,7 @@ manage_authentication_options() {
 	
 		# Validate that ${auth_service_add_via_admin_account_option} exists, is a volume owner, a local admin, and that ${auth_service_add_via_admin_password_option} is correct.
 		if [[ "${auth_legacy_service_migrate}" != "TRUE" ]]; then # If migrating a legacy sevice account, then the ${auth_service_add_via_admin_account_option} doesn't have to be validated.
-			if [[ $(groups "${auth_service_add_via_admin_account_option}" 2>/dev/null | grep -c 'admin') -eq 0 ]]; then
+			if [[ $(groups "${auth_service_add_via_admin_account_option}" 2> /dev/null | grep -c 'admin') -eq 0 ]]; then
 				log_super "Auth Error: The account \"${auth_service_add_via_admin_account_option}\" is not a local administrator."
 				auth_error_new="TRUE"
 			fi
@@ -3145,23 +3152,23 @@ manage_authentication_options() {
 			fi
 	
 			# Save ${auth_service_account} and ${auth_service_password} credentials to keychain and then validate retrieval by setting ${auth_service_account_keychain} and ${auth_service_password_keychain}.
-			security add-generic-password -a "super_auth_service_account" -s "Super Update Service" -w "$(echo "${auth_service_account}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			auth_service_account_keychain=$(security find-generic-password -w -a "super_auth_service_account" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+			security add-generic-password -a "super_auth_service_account" -s "Super Update Service" -w "$(echo "${auth_service_account}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			auth_service_account_keychain=$(security find-generic-password -w -a "super_auth_service_account" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 			if [[ "${auth_service_account}" != "${auth_service_account_keychain}" ]]; then
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_service_account is: ${auth_service_account}"
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_service_account_keychain is: ${auth_service_account_keychain}"
 				log_super "Auth Error: Unable to validate keychain item for the super service account, deleting keychain item."
 				auth_error_new="TRUE"
-				security delete-generic-password -a "super_auth_service_account" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+				security delete-generic-password -a "super_auth_service_account" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			fi
-			security add-generic-password -a "super_auth_service_password" -s "Super Update Service" -w "$(echo "${auth_service_password}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			auth_service_password_keychain=$(security find-generic-password -w -a "super_auth_service_password" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+			security add-generic-password -a "super_auth_service_password" -s "Super Update Service" -w "$(echo "${auth_service_password}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			auth_service_password_keychain=$(security find-generic-password -w -a "super_auth_service_password" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 			if [[ "${auth_service_password}" != "${auth_service_password_keychain}" ]]; then
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_service_password is: ${auth_service_password}"
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_service_password_keychain is: ${auth_service_password_keychain}"
 				log_super "Auth Error: Unable to validate keychain item for the super service password, deleting keychain item."
 				auth_error_new="TRUE"
-				security delete-generic-password -a "super_auth_service_password" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+				security delete-generic-password -a "super_auth_service_password" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			fi
 		fi
 	
@@ -3197,9 +3204,9 @@ manage_authentication_options() {
 			auth_error_new="TRUE"
 			[[ "${auth_legacy_service_migrate}" == "TRUE" ]] && log_super "Auth Error: Unable to validate migrated super service account, deleting account."
 			auth_error_new="TRUE"
-			sysadminctl -deleteUser "${auth_service_account}" >/dev/null 2>&1
-			security delete-generic-password -a "super_auth_service_account" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			security delete-generic-password -a "super_auth_service_password" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+			sysadminctl -deleteUser "${auth_service_account}" > /dev/null 2>&1
+			security delete-generic-password -a "super_auth_service_account" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			security delete-generic-password -a "super_auth_service_password" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			auth_service_account_saved="FALSE"
 			unset auth_service_account_keychain
 			unset auth_service_password_keychain
@@ -3220,23 +3227,23 @@ manage_authentication_options() {
 	
 		# If the ${auth_jamf_client_option} and ${auth_jamf_secret_option} are valid then save credentials to keychain and then validate retrieval by setting ${auth_jamf_client_keychain} and ${auth_jamf_secret_keychain}.
 		if [[ "${auth_error_new}" != "TRUE" ]]; then
-			security add-generic-password -a "super_auth_jamf_client" -s "Super Update Service" -w "$(echo "${auth_jamf_client_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			auth_jamf_client_keychain=$(security find-generic-password -w -a "super_auth_jamf_client" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+			security add-generic-password -a "super_auth_jamf_client" -s "Super Update Service" -w "$(echo "${auth_jamf_client_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			auth_jamf_client_keychain=$(security find-generic-password -w -a "super_auth_jamf_client" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 			if [[ "${auth_jamf_client_option}" != "${auth_jamf_client_keychain}" ]]; then
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_client_option is: ${auth_jamf_client_option}"
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_client_keychain is: ${auth_jamf_client_keychain}"
 				log_super "Auth Error: Unable to validate keychain item for --auth-jamf-client, deleting keychain item."
 				auth_error_new="TRUE"
-				security delete-generic-password -a "super_auth_jamf_client" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+				security delete-generic-password -a "super_auth_jamf_client" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			fi
-			security add-generic-password -a "super_auth_jamf_secret" -s "Super Update Service" -w "$(echo "${auth_jamf_secret_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			auth_jamf_secret_keychain=$(security find-generic-password -w -a "super_auth_jamf_secret" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+			security add-generic-password -a "super_auth_jamf_secret" -s "Super Update Service" -w "$(echo "${auth_jamf_secret_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			auth_jamf_secret_keychain=$(security find-generic-password -w -a "super_auth_jamf_secret" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 			if [[ "${auth_jamf_secret_option}" != "${auth_jamf_secret_keychain}" ]]; then
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_secret_option is: ${auth_jamf_secret_option}"
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_secret_keychain is: ${auth_jamf_secret_keychain}"
 				log_super "Auth Error: Unable to validate keychain item for --auth-jamf-secret, deleting keychain item."
 				auth_error_new="TRUE"
-				security delete-generic-password -a "super_auth_jamf_secret" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+				security delete-generic-password -a "super_auth_jamf_secret" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			fi
 		fi
 	
@@ -3266,23 +3273,23 @@ manage_authentication_options() {
 	
 		# If the ${super_auth_jamf_account} and ${super_auth_jamf_password} are valid then save credentials to keychain and then validate retrieval by setting ${auth_jamf_account_keychain} and ${auth_jamf_password_keychain}.
 		if [[ "${auth_error_new}" != "TRUE" ]]; then
-			security add-generic-password -a "super_auth_jamf_account" -s "Super Update Service" -w "$(echo "${auth_jamf_account_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			auth_jamf_account_keychain=$(security find-generic-password -w -a "super_auth_jamf_account" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+			security add-generic-password -a "super_auth_jamf_account" -s "Super Update Service" -w "$(echo "${auth_jamf_account_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			auth_jamf_account_keychain=$(security find-generic-password -w -a "super_auth_jamf_account" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 			if [[ "${auth_jamf_account_option}" != "${auth_jamf_account_keychain}" ]]; then
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_account_option is: ${auth_jamf_account_option}"
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_account_keychain is: ${auth_jamf_account_keychain}"
 				log_super "Auth Error: Unable to validate keychain item for --auth-jamf-account, deleting keychain item."
 				auth_error_new="TRUE"
-				security delete-generic-password -a "super_auth_jamf_account" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+				security delete-generic-password -a "super_auth_jamf_account" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			fi
-			security add-generic-password -a "super_auth_jamf_password" -s "Super Update Service" -w "$(echo "${auth_jamf_password_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" >/dev/null 2>&1
-			auth_jamf_password_keychain=$(security find-generic-password -w -a "super_auth_jamf_password" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+			security add-generic-password -a "super_auth_jamf_password" -s "Super Update Service" -w "$(echo "${auth_jamf_password_option}" | base64)" -T "/usr/bin/security" "/Library/Keychains/System.keychain" > /dev/null 2>&1
+			auth_jamf_password_keychain=$(security find-generic-password -w -a "super_auth_jamf_password" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 			if [[ "${auth_jamf_password_option}" != "${auth_jamf_password_keychain}" ]]; then
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_password_option is: ${auth_jamf_password_option}"
 				[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_password_keychain is: ${auth_jamf_password_keychain}"
 				log_super "Auth Error: Unable to validate keychain item for --auth-jamf-password, deleting keychain item."
 				auth_error_new="TRUE"
-				security delete-generic-password -a "super_auth_jamf_password" "/Library/Keychains/System.keychain" >/dev/null 2>&1
+				security delete-generic-password -a "super_auth_jamf_password" "/Library/Keychains/System.keychain" > /dev/null 2>&1
 			fi
 		fi
 	
@@ -3313,17 +3320,17 @@ manage_authentication_options() {
 		if [[ "${auth_legacy_local_migrate}" == "TRUE" ]]; then
 			log_super_audit "Status: Deleting saved credentials for legacy local account."
 			delete_pref_main "LocalAccount"
-			security delete-generic-password -a "${auth_legacy_local_account_saved}" -s "Super Local Account" /Library/Keychains/System.keychain >/dev/null 2>&1
+			security delete-generic-password -a "${auth_legacy_local_account_saved}" -s "Super Local Account" /Library/Keychains/System.keychain > /dev/null 2>&1
 		fi
 		if [[ "${auth_legacy_service_migrate}" == "TRUE" ]]; then
 			log_super_audit "Status: Deleting saved credentials for legacy super service account."
 			delete_pref_main "SuperAccount"
-			security delete-generic-password -a "${auth_legacy_super_account_saved}" -s "Super Service Account" /Library/Keychains/System.keychain >/dev/null 2>&1
+			security delete-generic-password -a "${auth_legacy_super_account_saved}" -s "Super Service Account" /Library/Keychains/System.keychain > /dev/null 2>&1
 		fi
 		if [[ "${auth_legacy_jamf_migrate}" == "TRUE" ]]; then
 			log_super_audit "Status: Deleting saved credentials for legacy Jamf Pro API account."
 			delete_pref_main "JamfAccount"
-			security delete-generic-password -a "${auth_legacy_jamf_account_saved}" -s "Super MDM Account" /Library/Keychains/System.keychain >/dev/null 2>&1
+			security delete-generic-password -a "${auth_legacy_jamf_account_saved}" -s "Super MDM Account" /Library/Keychains/System.keychain > /dev/null 2>&1
 		fi
 	fi
 }
@@ -3447,7 +3454,7 @@ get_saved_authentication() {
 				log_super "Warning: Unable to validate previously saved credentials for the current user: ${current_user_account_name}"
 				unset auth_local_account
 				unset auth_local_password
-				launchctl asuser "${current_user_id}" sudo -u "${current_user_account_name}" security delete-generic-password -a "super_auth_user_password" "/Users/${current_user_account_name}/Library/Keychains/login.keychain" >/dev/null 2>&1
+				launchctl asuser "${current_user_id}" sudo -u "${current_user_account_name}" security delete-generic-password -a "super_auth_user_password" "/Users/${current_user_account_name}/Library/Keychains/login.keychain" > /dev/null 2>&1
 				log_super "Status: A new automatic authentication password will be saved the next time a valid user succesfully authenticates."
 				auth_error_saved="TRUE"
 				auth_user_account_saved="FALSE"
@@ -3461,8 +3468,8 @@ get_saved_authentication() {
 	
 	# If there is a previously saved local account then validate the credentials and set ${auth_local_account} and ${auth_local_password}.
 	if [[ "${auth_local_account_saved}" == "TRUE" ]]; then
-		[[ -z "${auth_local_account_keychain}" ]] && auth_local_account_keychain=$(security find-generic-password -w -a "super_auth_local_account" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
-		[[ -z "${auth_local_password_keychain}" ]] && auth_local_password_keychain=$(security find-generic-password -w -a "super_auth_local_password" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+		[[ -z "${auth_local_account_keychain}" ]] && auth_local_account_keychain=$(security find-generic-password -w -a "super_auth_local_account" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
+		[[ -z "${auth_local_password_keychain}" ]] && auth_local_password_keychain=$(security find-generic-password -w -a "super_auth_local_password" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 		[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_local_account_keychain: ${auth_local_account_keychain}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_local_password_keychain: ${auth_local_password_keychain}"
 		if [[ -n "${auth_local_account_keychain}" ]] && [[ -n "${auth_local_password_keychain}" ]]; then
@@ -3492,8 +3499,8 @@ get_saved_authentication() {
 	
 	# If there is a previously saved super service account then validate the credentials and set ${auth_local_account} and ${auth_local_password}.
 	if [[ "${auth_service_account_saved}" == "TRUE" ]]; then
-		[[ -z "${auth_service_account_keychain}" ]] && auth_service_account_keychain=$(security find-generic-password -w -a "super_auth_service_account" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
-		[[ -z "${auth_service_password_keychain}" ]] && auth_service_password_keychain=$(security find-generic-password -w -a "super_auth_service_password" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+		[[ -z "${auth_service_account_keychain}" ]] && auth_service_account_keychain=$(security find-generic-password -w -a "super_auth_service_account" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
+		[[ -z "${auth_service_password_keychain}" ]] && auth_service_password_keychain=$(security find-generic-password -w -a "super_auth_service_password" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 		[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_service_account_keychain: ${auth_service_account_keychain}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_service_password_keychain: ${auth_service_password_keychain}"
 		if [[ -n "${auth_service_account_keychain}" ]] && [[ -n "${auth_service_password_keychain}" ]]; then
@@ -3524,8 +3531,8 @@ get_saved_authentication() {
 	
 	# If there is a previously saved Jamf Pro API client then validate the credentials and set ${auth_jamf_client} and ${auth_jamf_secret}.
 	if [[ "${auth_jamf_client_saved}" == "TRUE" ]]; then
-		[[ -z "${auth_jamf_client_keychain}" ]] && auth_jamf_client_keychain=$(security find-generic-password -w -a "super_auth_jamf_client" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
-		[[ -z "${auth_jamf_secret_keychain}" ]] && auth_jamf_secret_keychain=$(security find-generic-password -w -a "super_auth_jamf_secret" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+		[[ -z "${auth_jamf_client_keychain}" ]] && auth_jamf_client_keychain=$(security find-generic-password -w -a "super_auth_jamf_client" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
+		[[ -z "${auth_jamf_secret_keychain}" ]] && auth_jamf_secret_keychain=$(security find-generic-password -w -a "super_auth_jamf_secret" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 		[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_client_keychain: ${auth_jamf_client_keychain}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_secret_keychain: ${auth_jamf_secret_keychain}"
 		if [[ -n "${auth_jamf_client_keychain}" ]] && [[ -n "${auth_jamf_secret_keychain}" ]]; then
@@ -3556,8 +3563,8 @@ get_saved_authentication() {
 	
 	# If there is a previously saved Jamf Pro API account then validate the credentials and set ${auth_jamf_account} and ${auth_jamf_password}.
 	if [[ "${auth_jamf_account_saved}" == "TRUE" ]]; then
-		[[ -z "${auth_jamf_account_keychain}" ]] && auth_jamf_account_keychain=$(security find-generic-password -w -a "super_auth_jamf_account" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
-		[[ -z "${auth_jamf_password_keychain}" ]] && auth_jamf_password_keychain=$(security find-generic-password -w -a "super_auth_jamf_password" "/Library/Keychains/System.keychain" 2>/dev/null | base64 --decode)
+		[[ -z "${auth_jamf_account_keychain}" ]] && auth_jamf_account_keychain=$(security find-generic-password -w -a "super_auth_jamf_account" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
+		[[ -z "${auth_jamf_password_keychain}" ]] && auth_jamf_password_keychain=$(security find-generic-password -w -a "super_auth_jamf_password" "/Library/Keychains/System.keychain" 2> /dev/null | base64 --decode)
 		[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_account_keychain: ${auth_jamf_account_keychain}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_echo "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: auth_jamf_password_keychain: ${auth_jamf_password_keychain}"
 		if [[ -n "${auth_jamf_account_keychain}" ]] && [[ -n "${auth_jamf_password_keychain}" ]]; then
@@ -3605,7 +3612,7 @@ workflow_installation() {
 	log_super "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - SUPER INSTALLATION ****"
 	log_status "Running: Installation workflow."
 	log_super_audit "Installation: Copying super ${SUPER_VERSION} to ${SUPER_FOLDER}/super."
-	cp "$0" "${SUPER_FOLDER}/super" >/dev/null 2>&1
+	cp "$0" "${SUPER_FOLDER}/super" > /dev/null 2>&1
 	if [[ ! -d "/usr/local/bin" ]]; then
 		log_super "Installation: Creating local search path folder: /usr/local/bin"
 		mkdir -p "/usr/local/bin"
@@ -3613,7 +3620,7 @@ workflow_installation() {
 	fi
 	
 	log_super "Installation: Creating super search path link: ${SUPER_LINK}"
-	ln -s "${SUPER_FOLDER}/super" "${SUPER_LINK}" >/dev/null 2>&1
+	ln -s "${SUPER_FOLDER}/super" "${SUPER_LINK}" > /dev/null 2>&1
 	
 	log_super "Installation: Creating super LaunchDaemon helper: ${SUPER_FOLDER}/super-starter"
 	/bin/cat <<EOSS >"${SUPER_FOLDER}/super-starter"
@@ -3658,8 +3665,8 @@ EOSS
 	
 	if [[ -f "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" ]]; then
 		log_super "Installation: Removing previous super LaunchDaemon: /Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist"
-		launchctl bootout "system/${SUPER_LAUNCH_DAEMON_LABEL}" >/dev/null 2>&1
-		rm -f "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" 2>/dev/null
+		launchctl bootout "system/${SUPER_LAUNCH_DAEMON_LABEL}" > /dev/null 2>&1
+		rm -f "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" 2> /dev/null
 	fi
 	
 	log_super "Installation: Creating super LaunchDaemon: /Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist."
@@ -3687,17 +3694,17 @@ EOSS
 EOLD
 	
 	log_super "Installation: Setting permissions for installed super items."
-	chown -R root:wheel "${SUPER_FOLDER}" >/dev/null 2>&1
-	chmod -R a+r "${SUPER_FOLDER}" >/dev/null 2>&1
-	chmod -R go-w "${SUPER_FOLDER}" >/dev/null 2>&1
-	chmod a+x "${SUPER_FOLDER}/super" >/dev/null 2>&1
-	chmod a+x "${SUPER_FOLDER}/super-starter" >/dev/null 2>&1
-	chown root:wheel "${SUPER_LINK}" >/dev/null 2>&1
-	chmod a+rx "${SUPER_LINK}" >/dev/null 2>&1
-	chmod go-w "${SUPER_LINK}" >/dev/null 2>&1
-	chmod 644 "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" >/dev/null 2>&1
-	chown root:wheel "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" >/dev/null 2>&1
-	set_pref_main "SuperVersion" "${SUPER_VERSION}" >/dev/null 2>&1
+	chown -R root:wheel "${SUPER_FOLDER}" > /dev/null 2>&1
+	chmod -R a+r "${SUPER_FOLDER}" > /dev/null 2>&1
+	chmod -R go-w "${SUPER_FOLDER}" > /dev/null 2>&1
+	chmod a+x "${SUPER_FOLDER}/super" > /dev/null 2>&1
+	chmod a+x "${SUPER_FOLDER}/super-starter" > /dev/null 2>&1
+	chown root:wheel "${SUPER_LINK}" > /dev/null 2>&1
+	chmod a+rx "${SUPER_LINK}" > /dev/null 2>&1
+	chmod go-w "${SUPER_LINK}" > /dev/null 2>&1
+	chmod 644 "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" > /dev/null 2>&1
+	chown root:wheel "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" > /dev/null 2>&1
+	set_pref_main "SuperVersion" "${SUPER_VERSION}" > /dev/null 2>&1
 }
 
 # Download and install the IBM Notifier.app.
@@ -3714,7 +3721,7 @@ get_ibm_notifier() {
 		local unzip_response
 		unzip_response=$(unzip "${temp_file}" -d "${SUPER_FOLDER}/" 2>&1)
 		if [[ -d "${IBM_NOTIFIER_APP}" ]]; then
-			[[ -d "${SUPER_FOLDER}/__MACOSX" ]] && rm -Rf "${SUPER_FOLDER}/__MACOSX" >/dev/null 2>&1
+			[[ -d "${SUPER_FOLDER}/__MACOSX" ]] && rm -Rf "${SUPER_FOLDER}/__MACOSX" > /dev/null 2>&1
 			chmod -R a+rx "${IBM_NOTIFIER_APP}"
 		else
 			log_super "Error: Unable to install IBM Notifier.app."
@@ -3724,7 +3731,7 @@ get_ibm_notifier() {
 		log_super "Error: Unable to download IBM Notifier.app from: ${IBM_NOTIFIER_DOWNLOAD_URL}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: download_response is:\n${download_response}"
 	fi
-	rm -Rf "${temp_file}" >/dev/null 2>&1
+	rm -Rf "${temp_file}" > /dev/null 2>&1
 	umask "${previous_umask}"
 }
 
@@ -3781,7 +3788,7 @@ get_display_icon() {
 			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: sips_response is:\n${sips_response}"
 		fi
 	fi
-	rm -Rf "${get_display_icon_temp_file}" >/dev/null 2>&1
+	rm -Rf "${get_display_icon_temp_file}" > /dev/null 2>&1
 	umask "${previous_umask}"
 	unset get_display_icon_path
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: get_display_icon_error is: ${get_display_icon_error}"
@@ -3808,7 +3815,7 @@ get_mist_cli() {
 		log_super "Error: Unable to download mist-cli.pkg from: ${MIST_CLI_DOWNLOAD_URL}."
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: download_response is:\n${download_response}"
 	fi
-	rm -Rf "${temp_file}" >/dev/null 2>&1
+	rm -Rf "${temp_file}" > /dev/null 2>&1
 	umask "${previous_umask}"
 }
 
@@ -3843,8 +3850,8 @@ manage_helpers() {
 		check_ibm_notifier
 		if [[ "${ibm_notifier_valid}" == "FALSE" ]]; then
 			log_super "Status: Removing previously installed IBM Notifier.app."
-			rm -Rf "${IBM_NOTIFIER_APP}" >/dev/null 2>&1
-			[[ -d "${SUPER_FOLDER}/__MACOSX" ]] && rm -Rf "${SUPER_FOLDER}/__MACOSX" >/dev/null 2>&1
+			rm -Rf "${IBM_NOTIFIER_APP}" > /dev/null 2>&1
+			[[ -d "${SUPER_FOLDER}/__MACOSX" ]] && rm -Rf "${SUPER_FOLDER}/__MACOSX" > /dev/null 2>&1
 			get_ibm_notifier
 			[[ -d "${IBM_NOTIFIER_APP}" ]] && check_ibm_notifier
 		fi
@@ -3862,7 +3869,7 @@ manage_helpers() {
 			check_mist_cli
 			if [[ "${mist_cli_valid}" == "FALSE" ]]; then
 				log_super "Status: Removing previously installed mist-cli."
-				rm -Rf "${MIST_CLI_BINARY}" >/dev/null 2>&1
+				rm -Rf "${MIST_CLI_BINARY}" > /dev/null 2>&1
 				get_mist_cli
 				[[ -f "${MIST_CLI_BINARY}" ]] && check_mist_cli
 			fi
@@ -3883,16 +3890,16 @@ manage_helpers() {
 	elif [[ "${display_icon_light_file_path}" == "${display_icon_light_file_cached_origin}" ]] && [[ -f "${DISPLAY_ICON_LIGHT_FILE_CACHE}" ]]; then # Cached copy of the ${display_icon_light_file_path} is intact.
 		display_icon_light="${DISPLAY_ICON_LIGHT_FILE_CACHE}"
 	else # Need to acquire a new copy of the ${display_icon_light_file_path}.
-		[[ -f "${DISPLAY_ICON_LIGHT_FILE_CACHE}" ]] && rm -f "${DISPLAY_ICON_LIGHT_FILE_CACHE}" 2>/dev/null
+		[[ -f "${DISPLAY_ICON_LIGHT_FILE_CACHE}" ]] && rm -f "${DISPLAY_ICON_LIGHT_FILE_CACHE}" 2> /dev/null
 		delete_pref_main "DisplayIconLightFileCachedOrigin"
 		get_display_icon_path="${display_icon_light_file_path}"
 		get_display_icon
 		if [[ "${get_display_icon_error}" == "FALSE" ]]; then
 			log_super "Status: Validated new diplay icon for light mode sourced from: ${display_icon_light_file_path}"
-			cp "${get_display_icon_temp_file}.png" "${DISPLAY_ICON_LIGHT_FILE_CACHE}" 2>/dev/null 2>&1
+			cp "${get_display_icon_temp_file}.png" "${DISPLAY_ICON_LIGHT_FILE_CACHE}" 2> /dev/null 2>&1
 			display_icon_light="${DISPLAY_ICON_LIGHT_FILE_CACHE}"
-			chmod a+r "${DISPLAY_ICON_LIGHT_FILE_CACHE}"  2>/dev/null 2>&1
-			rm -Rf "${get_display_icon_temp_file}.png" >/dev/null 2>&1
+			chmod a+r "${DISPLAY_ICON_LIGHT_FILE_CACHE}"  2> /dev/null 2>&1
+			rm -Rf "${get_display_icon_temp_file}.png" > /dev/null 2>&1
 			unset get_display_icon_temp_file
 			set_pref_main "DisplayIconLightFileCachedOrigin" "${display_icon_light_file_path}"
 		else
@@ -3911,16 +3918,16 @@ manage_helpers() {
 	elif [[ "${display_icon_dark_file_path}" == "${display_icon_dark_file_cached_origin}" ]] && [[ -f "${DISPLAY_ICON_DARK_FILE_CACHE}" ]]; then  # Cached copy of the ${display_icon_dark_file_path} is intact.
 		display_icon_dark="${DISPLAY_ICON_DARK_FILE_CACHE}"
 	else # Need to acquire a new copy of the ${display_icon_dark_file_path}.
-		[[ -f "${DISPLAY_ICON_DARK_FILE_CACHE}" ]] && rm -f "${DISPLAY_ICON_DARK_FILE_CACHE}" 2>/dev/null
+		[[ -f "${DISPLAY_ICON_DARK_FILE_CACHE}" ]] && rm -f "${DISPLAY_ICON_DARK_FILE_CACHE}" 2> /dev/null
 		delete_pref_main "DisplayIconDarkFileCachedOrigin"
 		get_display_icon_path="${display_icon_dark_file_path}"
 		get_display_icon
 		if [[ "${get_display_icon_error}" == "FALSE" ]]; then
 			log_super "Status: Validated new diplay icon for dark mode sourced from: ${display_icon_dark_file_path}"
-			cp "${get_display_icon_temp_file}.png" "${DISPLAY_ICON_DARK_FILE_CACHE}" 2>/dev/null 2>&1
+			cp "${get_display_icon_temp_file}.png" "${DISPLAY_ICON_DARK_FILE_CACHE}" 2> /dev/null 2>&1
 			display_icon_dark="${DISPLAY_ICON_DARK_FILE_CACHE}"
-			chmod a+r "${DISPLAY_ICON_DARK_FILE_CACHE}"  2>/dev/null 2>&1
-			rm -Rf "${get_display_icon_temp_file}.png" >/dev/null 2>&1
+			chmod a+r "${DISPLAY_ICON_DARK_FILE_CACHE}"  2> /dev/null 2>&1
+			rm -Rf "${get_display_icon_temp_file}.png" > /dev/null 2>&1
 			unset get_display_icon_temp_file
 			set_pref_main "DisplayIconDarkFileCachedOrigin" "${display_icon_dark_file_path}"
 		else
@@ -3955,14 +3962,14 @@ workflow_startup() {
 	[[ "${config_status_option}" == "TRUE" ]] && show_config_status
 	
 	# Check for any previous super processes and kill them.
-	killall -9 "softwareupdate" "mist" >/dev/null 2>&1
-	killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+	killall -9 "softwareupdate" "mist" > /dev/null 2>&1
+	killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 	local super_previous_pid
-	super_previous_pid=$(pgrep -F "${SUPER_PID_FILE}" 2>/dev/null)
+	super_previous_pid=$(pgrep -F "${SUPER_PID_FILE}" 2> /dev/null)
 	if [[ -n "${super_previous_pid}" ]]; then
 		[[ -d "${SUPER_LOG_FOLDER}" ]] && log_super "Status: Found previous super instance running with PID ${super_previous_pid}, killing processes..."
 		[[ ! -d "${SUPER_LOG_FOLDER}" ]] && log_echo "Status: Found previous super instance running with PID ${super_previous_pid}, killing processes..."
-		kill -9 "${super_previous_pid}" >/dev/null 2>&1
+		kill -9 "${super_previous_pid}" > /dev/null 2>&1
 	fi
 	
 	# Create new ${SUPER_PID_FILE} for this instance of super.
@@ -4099,8 +4106,8 @@ workflow_startup() {
 	# Apple silicon authentication and workflow validations.
 	[[ "${mac_cpu_architecture}" == "arm64" ]] && manage_authentication_options
 	manage_workflow_options
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file after startup validation: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2>/dev/null)"
-	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n "${super_alternate_plist}" ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Alternate preference file after startup validation: ${super_alternate_plist}:\n$(defaults read "${super_alternate_plist}" 2>/dev/null)"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file after startup validation: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2> /dev/null)"
+	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n "${super_alternate_plist}" ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Alternate preference file after startup validation: ${super_alternate_plist}:\n$(defaults read "${super_alternate_plist}" 2> /dev/null)"
 	
 	# If the macOS Setup Assistant is incomplete, or the ${schedule_deferred_start_file} is not found, or the admin is only making alternate configuration changes then the workflow should automatically defer or exit.
 	if [[ ! -f "${APPLE_SETUP_DONE_FILE}" ]] || { [[ -n "${schedule_deferred_start_file}" ]] && [[ ! -f "${schedule_deferred_start_file}" ]]; } || [[ "${config_edit_main_option}" == "TRUE" ]] || [[ -n "${config_edit_option}" ]] || [[ -n "${config_delete_option}" ]] || [[ "${config_delete_all_option}" == "TRUE" ]]; then
@@ -4187,12 +4194,12 @@ workflow_startup() {
 	# Wait for a valid network connection. If there is still no network after two minutes, an automatic deferral is started.
 	local network_timeout
 	network_timeout=0
-	while [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]] && [[ $network_timeout -lt 120 ]]; do
+	while [[ $(ifconfig -a inet 2> /dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]] && [[ $network_timeout -lt 120 ]]; do
 		log_super "Status: Waiting for network..."
 		sleep 5
 		network_timeout=$((network_timeout + 5))
 	done
-	if [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]]; then
+	if [[ $(ifconfig -a inet 2> /dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]]; then
 		if [[ "${workflow_install_now_active}" == "TRUE" ]]; then
 			log_super "Error: Network unavailable, install now workflow can not continue."
 			log_status "Inactive Error: Network unavailable, install now workflow can not continue."
@@ -4214,7 +4221,7 @@ workflow_startup() {
 # [[ "${current_user_account_name}" != "FALSE" ]] && interactive_interrupt
 interactive_interrupt() {
 	log_super "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - INTERACTIVE INTERRUPT - PRESS ENTER TO CONTINUE OR CTRL-C TO EXIT ****"
-	read -n 1 -p -r >/dev/null 2>&1
+	read -n 1 -p -r > /dev/null 2>&1
 }
 
 # Restart super via the LaunchDaemon after waiting for ${restart_super_sleep_seconds} seconds.
@@ -4222,14 +4229,14 @@ restart_super() {
 	/usr/libexec/PlistBuddy -c "Delete :NextAutoLaunch" "${SUPER_MAIN_PLIST}.plist" 2> /dev/null
 	{
 		sleep $restart_super_sleep_seconds
-		launchctl bootout "system/${SUPER_LAUNCH_DAEMON_LABEL}" >/dev/null 2>&1
-		launchctl bootstrap system "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" >/dev/null 2>&1
+		launchctl bootout "system/${SUPER_LAUNCH_DAEMON_LABEL}" > /dev/null 2>&1
+		launchctl bootstrap system "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" > /dev/null 2>&1
 	} &
 	disown -a
 	[[ -n "${jamf_access_token}" ]] && delete_jamf_api_access_token
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file at restart exit: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2>/dev/null)"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file at restart exit: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2> /dev/null)"
 	log_super "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - EXIT AND RESTART WORKFLOW ****"
-	rm -f "${SUPER_PID_FILE}" 2>/dev/null
+	rm -f "${SUPER_PID_FILE}" 2> /dev/null
 	exit 0
 }
 
@@ -4241,7 +4248,7 @@ set_auto_launch_deferral() {
 	local next_auto_launch
 	next_auto_launch="$(date -j -f %s "${deferral_timer_epoch}" +%Y-%m-%d:%H:%M:00 | xargs)"
 	/usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string ${next_auto_launch}" "${SUPER_MAIN_PLIST}.plist" 2> /dev/null
-	launchctl bootstrap system "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" >/dev/null 2>&1
+	launchctl bootstrap system "/Library/LaunchDaemons/${SUPER_LAUNCH_DAEMON_LABEL}.plist" > /dev/null 2>&1
 	log_super "Exit: super is scheduled to automatically relaunch at: ${next_auto_launch}"
 	exit_clean
 }
@@ -4249,18 +4256,18 @@ set_auto_launch_deferral() {
 # This function is used when the super workflow exits with no errors.
 exit_clean() {
 	[[ -n "${jamf_access_token}" ]] && delete_jamf_api_access_token
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file at clean exit: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2>/dev/null)"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file at clean exit: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2> /dev/null)"
 	log_super "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - EXIT CLEAN ****"
-	rm -f "${SUPER_PID_FILE}" 2>/dev/null
+	rm -f "${SUPER_PID_FILE}" 2> /dev/null
 	exit 0
 }
 
 # This function is used when the super workflow must exit due to an unrecoverable error.
 exit_error() {
 	[[ -n "${jamf_access_token}" ]] && delete_jamf_api_access_token
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file at error exit: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2>/dev/null)"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file at error exit: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2> /dev/null)"
 	log_super "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - EXIT ERROR ****"
-	rm -f "${SUPER_PID_FILE}" 2>/dev/null
+	rm -f "${SUPER_PID_FILE}" 2> /dev/null
 	exit 1
 }
 
@@ -4343,16 +4350,16 @@ archive_logs() {
 		log_super "Status: Archiving legacy super logs to ${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}.zip."
 		mkdir -p "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}"
 		mv "${SUPER_FOLDER}/super.log" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}/super.log"
-		[[ -f "${SUPER_FOLDER}/asuList.log" ]] && rm -f "${SUPER_FOLDER}/asuList.log" 2>/dev/null
-		[[ -f "${SUPER_FOLDER}/installerList.log" ]] && rm -f "${SUPER_FOLDER}/installerList.log" 2>/dev/null
+		[[ -f "${SUPER_FOLDER}/asuList.log" ]] && rm -f "${SUPER_FOLDER}/asuList.log" 2> /dev/null
+		[[ -f "${SUPER_FOLDER}/installerList.log" ]] && rm -f "${SUPER_FOLDER}/installerList.log" 2> /dev/null
 		[[ -f "${SUPER_FOLDER}/asu.log" ]] && mv "${SUPER_FOLDER}/asu.log" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}/asu.log"
 		[[ -f "${SUPER_FOLDER}/installer.log" ]] && mv "${SUPER_FOLDER}/installer.log" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}/installer.log"
 		[[ -f "${SUPER_FOLDER}/mdmCommand.log" ]] && mv "${SUPER_FOLDER}/mdmCommand.log" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}/mdmCommand.log"
 		[[ -f "${SUPER_FOLDER}/mdmCommandDebug.log" ]] && mv "${SUPER_FOLDER}/mdmCommandDebug.log" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}/mdmCommandDebug.log"
 		[[ -f "${SUPER_FOLDER}/mdmWorkflow.log" ]] && mv "${SUPER_FOLDER}/mdmWorkflow.log" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}/mdmWorkflow.log"
 		[[ -f "${SUPER_FOLDER}/mdmWorkflowDebug.log" ]] && mv "${SUPER_FOLDER}/mdmWorkflowDebug.log" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}/mdmWorkflowDebug.log"
-		zip -r -j "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}.zip" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}" >/dev/null 2>&1
-		rm -rf "${SUPER_LOG_ARCHIVE_FOLDER:?}/${log_archive_legacy_name}" 2>/dev/null
+		zip -r -j "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}.zip" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_legacy_name}" > /dev/null 2>&1
+		rm -rf "${SUPER_LOG_ARCHIVE_FOLDER:?}/${log_archive_legacy_name}" 2> /dev/null
 		chown -R root:wheel "${SUPER_LOG_ARCHIVE_FOLDER}"
 		chmod -R a+r "${SUPER_LOG_ARCHIVE_FOLDER}"
 	fi
@@ -4360,15 +4367,15 @@ archive_logs() {
 	# Check to see if any log file is larger than $SUPER_LOG_ARCHIVE_SIZE.
 	local archive_logs_needed
 	archive_logs_needed="FALSE"
-	[[ $(ls -l "${SUPER_LOG}" 2>/dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
-	[[ $(ls -l "${SUPER_AUDIT_LOG}" 2>/dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
-	[[ $(ls -l "${SUPER_METRICS_LOG}" 2>/dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
-	[[ $(ls -l "${MSU_WORKFLOW_LOG}" 2>/dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
-	[[ $(ls -l "${INSTALLER_WORKFLOW_LOG}" 2>/dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
-	[[ $(ls -l "${MDM_COMMAND_LOG}" 2>/dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
-	[[ $(ls -l "${MDM_COMMAND_DEBUG_LOG}" 2>/dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
-	[[ $(ls -l "${MDM_WORKFLOW_LOG}" 2>/dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
-	[[ $(ls -l "${MDM_WORKFLOW_DEBUG_LOG}" 2>/dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
+	[[ $(ls -l "${SUPER_LOG}" 2> /dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
+	[[ $(ls -l "${SUPER_AUDIT_LOG}" 2> /dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
+	[[ $(ls -l "${SUPER_METRICS_LOG}" 2> /dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
+	[[ $(ls -l "${MSU_WORKFLOW_LOG}" 2> /dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
+	[[ $(ls -l "${INSTALLER_WORKFLOW_LOG}" 2> /dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
+	[[ $(ls -l "${MDM_COMMAND_LOG}" 2> /dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
+	[[ $(ls -l "${MDM_COMMAND_DEBUG_LOG}" 2> /dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
+	[[ $(ls -l "${MDM_WORKFLOW_LOG}" 2> /dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
+	[[ $(ls -l "${MDM_WORKFLOW_DEBUG_LOG}" 2> /dev/null | awk '{print int($5/1000)}') -gt $SUPER_LOG_ARCHIVE_SIZE ]] && archive_logs_needed="TRUE"
 	
 	# A super log has become to large, archival is required.
 	if [[ "${archive_logs_needed}" == "TRUE" ]]; then
@@ -4388,17 +4395,17 @@ archive_logs() {
 		[[ -f "${MDM_COMMAND_DEBUG_LOG}" ]] && mv "${MDM_COMMAND_DEBUG_LOG}" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_name}/$(basename ${MDM_COMMAND_DEBUG_LOG})"
 		[[ -f "${MDM_WORKFLOW_LOG}" ]] && mv "${MDM_WORKFLOW_LOG}" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_name}/$(basename ${MDM_WORKFLOW_LOG})"
 		[[ -f "${MDM_WORKFLOW_DEBUG_LOG}" ]] && mv "${MDM_WORKFLOW_DEBUG_LOG}" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_name}/$(basename ${MDM_WORKFLOW_DEBUG_LOG})"
-		zip -r -j "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_name}.zip" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_name}" >/dev/null 2>&1
-		rm -rf "${SUPER_LOG_ARCHIVE_FOLDER:?}/${log_archive_name}" 2>/dev/null
+		zip -r -j "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_name}.zip" "${SUPER_LOG_ARCHIVE_FOLDER}/${log_archive_name}" > /dev/null 2>&1
+		rm -rf "${SUPER_LOG_ARCHIVE_FOLDER:?}/${log_archive_name}" 2> /dev/null
 		chown -R root:wheel "${SUPER_LOG_ARCHIVE_FOLDER}"
 		chmod -R a+r "${SUPER_LOG_ARCHIVE_FOLDER}"
 	fi
 	
 	# This is a fail-safe to remove any excessively large files from the ${SUPER_LOG_ARCHIVE_FOLDER}.
 	for log_archive_file in "${SUPER_LOG_ARCHIVE_FOLDER}"/*; do
-		if [[ $(ls -l "${log_archive_file}" 2>/dev/null | awk '{print int($5/1000)}') -gt $((SUPER_LOG_ARCHIVE_SIZE * 10)) ]]; then
+		if [[ $(ls -l "${log_archive_file}" 2> /dev/null | awk '{print int($5/1000)}') -gt $((SUPER_LOG_ARCHIVE_SIZE * 10)) ]]; then
 			log_super "Warning: A file in the super log archive folder was larger than $((SUPER_LOG_ARCHIVE_SIZE * 10)) KB, deleting file to save space: ${log_archive_file}"
-			rm -rf "${log_archive_file:?}" 2>/dev/null
+			rm -rf "${log_archive_file:?}" 2> /dev/null
 		fi
 	done
 }
@@ -4414,7 +4421,7 @@ check_current_user() {
 	local current_user_account_name_response
 	current_user_account_name_response=$(scutil <<<"show State:/Users/ConsoleUser" | awk '/Name :/ {$1=$2="";print $0;}' | xargs)
 	local current_user_id_response
-	current_user_id_response=$(id -u "${current_user_account_name_response}" 2>/dev/null)
+	current_user_id_response=$(id -u "${current_user_account_name_response}" 2> /dev/null)
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: current_user_account_name is: ${current_user_account_name}"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: current_user_id is: ${current_user_id}"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: current_user_account_name_response is: ${current_user_account_name_response}"
@@ -4434,7 +4441,7 @@ check_current_user() {
 		{ [[ $(id -u) -ne 0 ]] || [[ ! -d "${SUPER_LOG_FOLDER}" ]]; } && log_echo "Status: Current GUI user is system account: ${current_user_account_name_response}"
 	else # Normal locally logged in user.
 		current_user_account_name="${current_user_account_name_response}"
-		current_user_id=$(id -u "${current_user_account_name}" 2>/dev/null)
+		current_user_id=$(id -u "${current_user_account_name}" 2> /dev/null)
 		{ [[ $(id -u) -eq 0 ]] && [[ -d "${SUPER_LOG_FOLDER}" ]]; } && log_super "Status: Current active GUI user is: ${current_user_account_name} (${current_user_id})"
 		{ [[ $(id -u) -ne 0 ]] || [[ ! -d "${SUPER_LOG_FOLDER}" ]]; } && log_echo "Status: Current active GUI user is: ${current_user_account_name} (${current_user_id})"
 	fi
@@ -4443,8 +4450,8 @@ check_current_user() {
 	
 	# Only collect user details if it's a "normal" GUI user.
 	if [[ "${current_user_account_name}" != "FALSE" ]] && [[ "${current_user_id}" != "FALSE" ]] && [[ -d "${SUPER_LOG_FOLDER}" ]]; then
-		current_user_guid=$(dscl . read "/Users/${current_user_account_name}" GeneratedUID 2>/dev/null | awk '{print $2;}')
-		current_user_real_name=$(dscl . read "/Users/${current_user_account_name}" RealName 2>/dev/null | tail -1 | sed -e 's/^RealName: //g' -e 's/^ //g')
+		current_user_guid=$(dscl . read "/Users/${current_user_account_name}" GeneratedUID 2> /dev/null | awk '{print $2;}')
+		current_user_real_name=$(dscl . read "/Users/${current_user_account_name}" RealName 2> /dev/null | tail -1 | sed -e 's/^RealName: //g' -e 's/^ //g')
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: current_user_guid is: ${current_user_guid}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: current_user_real_name is: ${current_user_real_name}"
 		current_user_is_admin="FALSE"
@@ -4453,11 +4460,11 @@ check_current_user() {
 		current_user_password_policies="FALSE"
 		current_user_system_password_policies="FALSE"
 		if [[ -n "${current_user_id}" ]] && [[ -n "${current_user_guid}" ]] && [[ -n "${current_user_real_name}" ]]; then
-			[[ $(groups "${current_user_account_name}" 2>/dev/null | grep -c 'admin') -gt 0 ]] && current_user_is_admin="TRUE"
-			[[ $(dscl . read "/Users/${current_user_account_name}" AuthenticationAuthority 2>/dev/null | grep -c 'SecureToken') -gt 0 ]] && current_user_has_secure_token="TRUE"
-			[[ $(diskutil apfs listcryptousers / 2>/dev/null | grep -c "${current_user_guid}") -gt 0 ]] && current_user_is_volume_owner="TRUE"
+			[[ $(groups "${current_user_account_name}" 2> /dev/null | grep -c 'admin') -gt 0 ]] && current_user_is_admin="TRUE"
+			[[ $(dscl . read "/Users/${current_user_account_name}" AuthenticationAuthority 2> /dev/null | grep -c 'SecureToken') -gt 0 ]] && current_user_has_secure_token="TRUE"
+			[[ $(diskutil apfs listcryptousers / 2> /dev/null | grep -c "${current_user_guid}") -gt 0 ]] && current_user_is_volume_owner="TRUE"
 			local current_user_appearance_mode_response
-			current_user_appearance_mode_response=$(sudo -u "${current_user_account_name}" osascript -l 'JavaScript' -e "ObjC.import('AppKit'); $.NSAppearance.currentDrawingAppearance.bestMatchFromAppearancesWithNames(['NSAppearanceNameAqua', 'NSAppearanceNameDarkAqua']).js;" 2>/dev/null)
+			current_user_appearance_mode_response=$(sudo -u "${current_user_account_name}" osascript -l 'JavaScript' -e "ObjC.import('AppKit'); $.NSAppearance.currentDrawingAppearance.bestMatchFromAppearancesWithNames(['NSAppearanceNameAqua', 'NSAppearanceNameDarkAqua']).js;" 2> /dev/null)
 			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: current_user_appearance_mode_response is: ${current_user_appearance_mode_response}"
 			[[ "${current_user_appearance_mode_response}" == "NSAppearanceNameAqua" ]] && current_user_appearance_mode="LIGHT"
 			[[ "${current_user_appearance_mode_response}" == "NSAppearanceNameDarkAqua" ]] && current_user_appearance_mode="DARK"
@@ -4483,13 +4490,13 @@ check_system() {
 	macos_title="macOS $(awk '/SOFTWARE LICENSE AGREEMENT FOR/' '/System/Library/CoreServices/Setup Assistant.app/Contents/Resources/en.lproj/OSXSoftwareLicense.rtf' | awk -F 'macOS ' '{print $NF}' | awk '{print substr($0, 0, length($0)-1)}' | sed -e 's/[0-9]//g' | xargs)" # Expected output: macOS Ventura or "*PRE-RELEASE*"
 	[[ $(echo "${macos_title}" | grep -c 'PRE-RELEASE') -gt 0 ]] && macos_title="macOS Beta"
 	mac_cpu_architecture=$(arch) # Expected output: i386, arm64
-	mac_model_name=$(system_profiler SPHardwareDataType | grep 'Model Name' | awk -F ': ' '{print $2;}') # Expected output: MacBook Pro
+	mac_model_name=$(system_profiler SPHardwareDataType 2> /dev/null | grep 'Model Name' | awk -F ': ' '{print $2;}') # Expected output: MacBook Pro
 	[[ $(echo "${mac_model_name}" | grep -c 'Book') -gt 0 ]] && mac_is_portable="TRUE" # Expected output: TRUE
 	if [[ -n $macos_version_patch ]]; then # macOS version has a patch number.
-		[[ -n "${macos_version_extra}" ]] && macos_version_full="${macos_title} ${macos_version_major}.${macos_version_minor}.${macos_version_patch}${macos_version_extra}-${macos_build}"
+		[[ -n "${macos_version_extra}" ]] && macos_version_full="${macos_title} ${macos_version_major}.${macos_version_minor}.${macos_version_patch} ${macos_version_extra}-${macos_build}"
 		[[ -z "${macos_version_extra}" ]] && macos_version_full="${macos_title} ${macos_version_major}.${macos_version_minor}.${macos_version_patch}-${macos_build}"
 	else # macOS version does not have a patch number.
-		[[ -n "${macos_version_extra}" ]] && macos_version_full="${macos_title} ${macos_version_major}.${macos_version_minor}${macos_version_extra}-${macos_build}"
+		[[ -n "${macos_version_extra}" ]] && macos_version_full="${macos_title} ${macos_version_major}.${macos_version_minor} ${macos_version_extra}-${macos_build}"
 		[[ -z "${macos_version_extra}" ]] && macos_version_full="${macos_title} ${macos_version_major}.${macos_version_minor}-${macos_build}"
 	fi
 	if [[ "${mac_cpu_architecture}" == "arm64" ]]; then # Mac computers with Apple Silicon.
@@ -4528,9 +4535,9 @@ check_msu_settings() {
 	
 	# Start with automatic check.
 	local msu_automatic_check_managed
-	msu_automatic_check_managed=$(defaults read "${MSU_MANAGED_PLIST}" AutomaticCheckEnabled 2>/dev/null)
+	msu_automatic_check_managed=$(defaults read "${MSU_MANAGED_PLIST}" AutomaticCheckEnabled 2> /dev/null)
 	local msu_automatic_check_local
-	msu_automatic_check_local=$(defaults read "${MSU_LOCAL_PLIST}" AutomaticCheckEnabled 2>/dev/null)
+	msu_automatic_check_local=$(defaults read "${MSU_LOCAL_PLIST}" AutomaticCheckEnabled 2> /dev/null)
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_automatic_check_managed is: ${msu_automatic_check_managed}"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_automatic_check_local is: ${msu_automatic_check_local}"
 	[[ -n $msu_automatic_check_managed ]] && [[ $msu_automatic_check_managed -eq 0 ]] && msu_automatic_download="FALSE"
@@ -4539,9 +4546,9 @@ check_msu_settings() {
 	if [[ "${msu_automatic_check}" == "TRUE" ]]; then
 		# Automatic download check.
 		local msu_automatic_download_managed
-		msu_automatic_download_managed=$(defaults read "${MSU_MANAGED_PLIST}" AutomaticDownload 2>/dev/null)
+		msu_automatic_download_managed=$(defaults read "${MSU_MANAGED_PLIST}" AutomaticDownload 2> /dev/null)
 		local msu_automatic_download_local
-		msu_automatic_download_local=$(defaults read "${MSU_LOCAL_PLIST}" AutomaticDownload 2>/dev/null)
+		msu_automatic_download_local=$(defaults read "${MSU_LOCAL_PLIST}" AutomaticDownload 2> /dev/null)
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_automatic_download_managed is: ${msu_automatic_download_managed}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_automatic_download_local is: ${msu_automatic_download_local}"
 		[[ -n $msu_automatic_download_managed ]] && [[ $msu_automatic_download_managed -eq 0 ]] && msu_automatic_download="FALSE"
@@ -4550,9 +4557,9 @@ check_msu_settings() {
 		
 		# Automatic macOS installation check.
 		local msu_automatic_macos_installation_managed
-		msu_automatic_macos_installation_managed=$(defaults read "${MSU_MANAGED_PLIST}" AutomaticallyInstallMacOSUpdates 2>/dev/null)
+		msu_automatic_macos_installation_managed=$(defaults read "${MSU_MANAGED_PLIST}" AutomaticallyInstallMacOSUpdates 2> /dev/null)
 		local msu_automatic_macos_installation_local
-		msu_automatic_macos_installation_local=$(defaults read "${MSU_LOCAL_PLIST}" AutomaticallyInstallMacOSUpdates 2>/dev/null)
+		msu_automatic_macos_installation_local=$(defaults read "${MSU_LOCAL_PLIST}" AutomaticallyInstallMacOSUpdates 2> /dev/null)
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_automatic_macos_installation_managed is: ${msu_automatic_macos_installation_managed}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_automatic_macos_installation_local is: ${msu_automatic_macos_installation_local}"
 		[[ -n $msu_automatic_macos_installation_managed ]] && [[ $msu_automatic_macos_installation_managed -eq 0 ]] && msu_automatic_macos_installation="FALSE"
@@ -4561,13 +4568,13 @@ check_msu_settings() {
 		
 		# Automatic security update check.
 		local msu_automatic_config_data_managed
-		msu_automatic_config_data_managed=$(defaults read "${MSU_MANAGED_PLIST}" ConfigDataInstall 2>/dev/null)
+		msu_automatic_config_data_managed=$(defaults read "${MSU_MANAGED_PLIST}" ConfigDataInstall 2> /dev/null)
 		local msu_automatic_config_data_local
-		msu_automatic_config_data_local=$(defaults read "${MSU_LOCAL_PLIST}" ConfigDataInstall 2>/dev/null)
+		msu_automatic_config_data_local=$(defaults read "${MSU_LOCAL_PLIST}" ConfigDataInstall 2> /dev/null)
 		local msu_automatic_critical_update_managed
-		msu_automatic_critical_update_managed=$(defaults read "${MSU_MANAGED_PLIST}" CriticalUpdateInstall 2>/dev/null)
+		msu_automatic_critical_update_managed=$(defaults read "${MSU_MANAGED_PLIST}" CriticalUpdateInstall 2> /dev/null)
 		local msu_automatic_critical_update_local
-		msu_automatic_critical_update_local=$(defaults read "${MSU_LOCAL_PLIST}" CriticalUpdateInstall 2>/dev/null)
+		msu_automatic_critical_update_local=$(defaults read "${MSU_LOCAL_PLIST}" CriticalUpdateInstall 2> /dev/null)
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_automatic_config_data_managed is: ${msu_automatic_config_data_managed}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_automatic_config_data_local is: ${msu_automatic_config_data_local}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_automatic_critical_update_managed is: ${msu_automatic_critical_update_managed}"
@@ -4591,7 +4598,7 @@ check_msu_settings() {
 check_auth_local_account() {
 	auth_error_local="FALSE"
 	local auth_local_guid
-	auth_local_guid=$(dscl . read "/Users/${auth_local_account}" GeneratedUID 2>/dev/null | awk '{print $2;}')
+	auth_local_guid=$(dscl . read "/Users/${auth_local_account}" GeneratedUID 2> /dev/null | awk '{print $2;}')
 	if [[ -n "${auth_local_guid}" ]]; then
 		if [[ ! $(diskutil apfs listcryptousers / | grep -c "${auth_local_guid}") -gt 0 ]]; then
 			log_super "Auth Error: The account \"${auth_local_account}\" is not a system volume owner."
@@ -4615,7 +4622,7 @@ check_storage_available() {
 	storage_ready="FALSE"
 	[[ -z "${current_user_account_name}" ]] && check_current_user
 	[[ "${current_user_account_name}" != "FALSE" ]] && storage_available_gigabytes=$(osascript -l 'JavaScript' -e "ObjC.import('Foundation'); var freeSpaceBytesRef=Ref(); $.NSURL.fileURLWithPath('/').getResourceValueForKeyError(freeSpaceBytesRef, 'NSURLVolumeAvailableCapacityForImportantUsageKey', null); Math.round(ObjC.unwrap(freeSpaceBytesRef[0]) / 1000000000)")
-	[[ "${current_user_account_name}" == "FALSE" ]] && storage_available_gigabytes=$(/usr/libexec/mdmclient QueryDeviceInformation 2>/dev/null | grep 'AvailableDeviceCapacity' | head -n 1 | awk '{print $3;}' | sed -e 's/;//g' -e 's/"//g' -e 's/\.[0-9]*//g')
+	[[ "${current_user_account_name}" == "FALSE" ]] && storage_available_gigabytes=$(/usr/libexec/mdmclient QueryDeviceInformation 2> /dev/null | grep 'AvailableDeviceCapacity' | head -n 1 | awk '{print $3;}' | sed -e 's/;//g' -e 's/"//g' -e 's/\.[0-9]*//g')
 	if [[ -z "${storage_available_gigabytes}" ]] || [[ "${storage_available_gigabytes}" == "0" ]] || [[ ! "${storage_available_gigabytes}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
 		log_super "Warning: Initial attempt to determine available storage returned an unexpected value of ${storage_available_gigabytes}, attempting fallback methods..."
 		[[ "${current_user_account_name}" != "FALSE" ]] && storage_available_gigabytes=$(osascript -l 'JavaScript' -e "ObjC.import('Foundation'); var freeSpaceBytesRef=Ref(); $.NSURL.fileURLWithPath('/').getResourceValueForKeyError(freeSpaceBytesRef, 'NSURLVolumeAvailableCapacityKey', null); Math.round(ObjC.unwrap(freeSpaceBytesRef[0]) / 1000000000)")
@@ -4708,7 +4715,7 @@ check_mdm_service() {
 	if [[ $(echo "${profiles_response}" | grep -c 'MDM server') -gt 0 ]]; then
 		mdm_enrolled="TRUE"
 		[[ $(echo "${profiles_response}" | grep 'Enrolled via DEP:' | grep -c 'Yes') -gt 0 ]] && mdm_automatically_enrolled="TRUE"
-		mdm_service_url="https://$(echo "${profiles_response}" | grep 'MDM server' | awk -F '/' '{print $3;}')"
+		mdm_service_url="https://$(echo "${profiles_response}" | grep '^MDM server' | awk -F '/' '{print $3;}')"
 		local curl_response
 		curl_response=$(curl --user-agent "${SUPER_USER_AGENT}" --silent --head --location "${mdm_service_url}" | head -n 1)
 		if [[ $(echo "${curl_response}" | grep -c 'HTTP') -gt 0 ]] && [[ $(echo "${curl_response}" | grep -c -e '400' -e '40[4-9]' -e '4[1-9][0-9]' -e '5[0-9][0-9]') -eq 0 ]]; then
@@ -4737,7 +4744,7 @@ check_bootstrap_token_escrow() {
 		if [[ $macos_version_normalized -ge 130300 ]]; then
 			if [[ "${auth_error_mdm}" == "FALSE" ]]; then
 				local mdmclient_response
-				mdmclient_response=$(/usr/libexec/mdmclient QueryDeviceInformation 2>/dev/null | grep 'EACSPreflight' | sed -e 's/        EACSPreflight = //g' -e 's/"//g' -e 's/;//g')
+				mdmclient_response=$(/usr/libexec/mdmclient QueryDeviceInformation 2> /dev/null | grep 'EACSPreflight' | sed -e 's/        EACSPreflight = //g' -e 's/"//g' -e 's/;//g')
 				if [[ $(echo "${mdmclient_response}" | grep -c 'success') -gt 0 ]] || [[ $(echo "${mdmclient_response}" | grep -c 'EFI password exists') -gt 0 ]]; then
 					log_super "Status: Bootstrap token escrowed and validated with MDM service."
 				else
@@ -5175,13 +5182,13 @@ get_sofa_macos_json() {
 	sofa_macos_json_checksum_cache=$(get_pref "SOFAMacOSJsonCacheChecksum")
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: sofa_macos_json_checksum_cache is: ${sofa_macos_json_checksum_cache}"
 	if [[ -n "${sofa_macos_json_checksum_cache}" ]]; then
-		if [[ -e "${SOFA_MACOS_JSON_ETAG_CACHE}" ]] && [[ "${sofa_macos_json_checksum_cache}" == "$(md5 -q "${SOFA_MACOS_JSON_CACHE}" 2>/dev/null)" ]]; then
+		if [[ -e "${SOFA_MACOS_JSON_ETAG_CACHE}" ]] && [[ "${sofa_macos_json_checksum_cache}" == "$(md5 -q "${SOFA_MACOS_JSON_CACHE}" 2> /dev/null)" ]]; then
 			sofa_macos_cache="TRUE"
 		else
 			log_super "Status: The SOFA macOS releases feed cache is not valid, a new feed must be downloaded."
 			delete_pref_main "SOFAMacOSJsonCacheChecksum"
-			rm -f "${SOFA_MACOS_JSON_ETAG_CACHE}" 2>/dev/null
-			rm -f "${SOFA_MACOS_JSON_CACHE}" 2>/dev/null
+			rm -f "${SOFA_MACOS_JSON_ETAG_CACHE}" 2> /dev/null
+			rm -f "${SOFA_MACOS_JSON_CACHE}" 2> /dev/null
 		fi
 	fi
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: sofa_macos_cache is: ${sofa_macos_cache}"
@@ -5210,10 +5217,10 @@ get_sofa_macos_json() {
 	
 	# If the ${SOFA_MACOS_JSON_CACHE} is valid, then save cache information.
 	if [[ "${sofa_macos_json}" == "TRUE" ]]; then
-		set_pref_main "SOFAMacOSJsonCacheChecksum" "$(md5 -q "${SOFA_MACOS_JSON_CACHE}" 2>/dev/null)"
+		set_pref_main "SOFAMacOSJsonCacheChecksum" "$(md5 -q "${SOFA_MACOS_JSON_CACHE}" 2> /dev/null)"
 	else
 		delete_pref_main "SOFAMacOSJsonCacheChecksum"
-		rm -f "${SOFA_MACOS_JSON_ETAG_CACHE}" 2>/dev/null
+		rm -f "${SOFA_MACOS_JSON_ETAG_CACHE}" 2> /dev/null
 	fi
 }
 
@@ -5303,16 +5310,16 @@ check_schedule_zero_date() {
 	# If no ${schedule_zero_date} yet and the ${schedule_zero_date_release} is enabled and there is a ${schedule_zero_date_version_target} and there appears to be a valid ${SOFA_MACOS_JSON_CACHE}, then attempt to parse and find the release date associated with ${schedule_zero_date_version_target}
 	if [[ "${schedule_zero_date}" == "FALSE" ]] && [[ "${schedule_zero_date_version_target}" != "FALSE" ]] && [[ "${schedule_zero_date_release}" == "TRUE" ]] && [[ "${sofa_macos_json}" == "TRUE" ]]; then
 		local sofa_osversions_array_index
-		for array_index in $(seq 0 "$(sqlite3 /dev/null "SELECT json_array_length(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions')"-1 2>/dev/null)"); do
-			if [[ $(sqlite3 /dev/null "SELECT json_extract(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions[$array_index].OSVersion')" 2>/dev/null | awk '{print $2;}') -eq $(echo "${schedule_zero_date_version_target}" | awk -F '.' '{print $1}') ]]; then
+		for array_index in $(seq 0 "$(sqlite3 /dev/null "SELECT json_array_length(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions')"-1 2> /dev/null)"); do
+			if [[ $(sqlite3 /dev/null "SELECT json_extract(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions[$array_index].OSVersion')" 2> /dev/null | awk '{print $2;}') -eq $(echo "${schedule_zero_date_version_target}" | awk -F '.' '{print $1}') ]]; then
 				sofa_osversions_array_index=$array_index
 				break
 			fi
 		done
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: sofa_osversions_array_index: ${sofa_osversions_array_index}"
-		for array_index in $(seq 0 "$(sqlite3 /dev/null "SELECT json_array_length(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions[$sofa_osversions_array_index].SecurityReleases')"-1 2>/dev/null)"); do
-			if [[ $(sqlite3 /dev/null "SELECT json_extract(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions[$sofa_osversions_array_index].SecurityReleases[$array_index].ProductVersion')" 2>/dev/null) == "${schedule_zero_date_version_target}" ]]; then
-				schedule_zero_date=$(sqlite3 /dev/null "SELECT json_extract(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions[$sofa_osversions_array_index].SecurityReleases[$array_index].ReleaseDate')" 2>/dev/null | sed -e 's/T/:/g' -e 's/:00Z//g')
+		for array_index in $(seq 0 "$(sqlite3 /dev/null "SELECT json_array_length(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions[$sofa_osversions_array_index].SecurityReleases')"-1 2> /dev/null)"); do
+			if [[ $(sqlite3 /dev/null "SELECT json_extract(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions[$sofa_osversions_array_index].SecurityReleases[$array_index].ProductVersion')" 2> /dev/null) == "${schedule_zero_date_version_target}" ]]; then
+				schedule_zero_date=$(sqlite3 /dev/null "SELECT json_extract(readfile('${SOFA_MACOS_JSON_CACHE}'), '$.OSVersions[$sofa_osversions_array_index].SecurityReleases[$array_index].ReleaseDate')" 2> /dev/null | sed -e 's/T/:/g' -e 's/:00Z//g')
 				log_super_audit "Status: Setting new automatic zero date based on the ${workflow_target} release date of ${schedule_zero_date}."
 				set_pref_main "ScheduleZeroDateAutomaticRelease" "${schedule_zero_date}"
 				[[ -n "${schedule_zero_date_automatic_start_previous}" ]] && delete_pref_main "ScheduleZeroDateAutomaticStart" && unset schedule_zero_date_automatic_start_previous
@@ -5523,17 +5530,20 @@ set_scheduled_install_deferral() {
 			if [[ $scheduled_install_reminder_item -ge $deferral_timer_scheduled_install_minutes ]]; then
 				log_super "Status: Scheduled installation reminder of ${scheduled_install_reminder_item} minutes prior to installation has passed."
 				scheduled_install_suppress_reminder="FALSE"
+				deferral_timer_minutes="${deferral_timer_scheduled_install_minutes}"
+				[[ $deferral_timer_minutes -lt 2 ]] && deferral_timer_minutes=2
 			elif [[ $scheduled_install_reminder_item -lt $deferral_timer_scheduled_install_minutes ]]; then
 				deferral_timer_minutes=$((deferral_timer_scheduled_install_minutes - scheduled_install_reminder_item))
-				[[ $deferral_timer_minutes -lt 2 ]] && deferral_timer_scheduled_install_minutes=2
+				[[ $deferral_timer_minutes -lt 2 ]] && deferral_timer_minutes=2
 				log_super "Status: Scheduled installation on $(date -j -f %Y-%m-%d "${workflow_scheduled_install:0:10}" +%a | tr '[:lower:]' '[:upper:]') ${workflow_scheduled_install}, with a warning notification ${scheduled_install_reminder_item} minutes prior, deferring for ${deferral_timer_minutes} minutes from now."
 				log_status "Pending: Scheduled installation on $(date -j -f %Y-%m-%d "${workflow_scheduled_install:0:10}" +%a | tr '[:lower:]' '[:upper:]') ${workflow_scheduled_install}, with a warning notification ${scheduled_install_reminder_item} minutes prior, deferring for ${deferral_timer_minutes} minutes from now."
-			break
+				break
 			fi
 		done
 		IFS="${previous_ifs}"
 	else # Default scheduled installation deferral.
 		deferral_timer_minutes="${deferral_timer_scheduled_install_minutes}"
+		[[ $deferral_timer_minutes -lt 2 ]] && deferral_timer_minutes=2
 		log_super "Status: Scheduled installation on $(date -j -f %Y-%m-%d "${workflow_scheduled_install:0:10}" +%a | tr '[:lower:]' '[:upper:]') ${workflow_scheduled_install}, deferring for ${deferral_timer_minutes} minutes from now."
 		log_status "Pending: Scheduled installation on $(date -j -f %Y-%m-%d "${workflow_scheduled_install:0:10}" +%a | tr '[:lower:]' '[:upper:]') ${workflow_scheduled_install}, deferring for ${deferral_timer_minutes} minutes from now."
 	fi
@@ -5671,9 +5681,9 @@ check_deadlines_days_date() {
 			deadline_date_hard_difference=$((deadline_date_hard_epoch - workflow_time_epoch))
 			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deadline_date_hard_difference is: ${deadline_date_hard_difference}"
 			if [[ $deadline_date_hard_difference -le 180 ]]; then
-				log_super "Status: Hard deadline date of ${deadline_date_soft} is only ${deadline_date_hard_difference} seconds away, waiting for deadline to pass..."
+				log_super "Status: Hard deadline date of ${deadline_date_hard} is only ${deadline_date_hard_difference} seconds away, waiting for deadline to pass..."
 				sleep $((deadline_date_hard_difference + 1))
-				log_super "Status: Hard deadline date of ${deadline_date_soft} has passed."
+				log_super "Status: Hard deadline date of ${deadline_date_hard} has passed."
 				deadline_date_status="HARD"
 			else
 				log_super "Status: Hard deadline date of ${deadline_date_hard} not passed."
@@ -5765,7 +5775,7 @@ check_deadlines_days_date() {
 				fi
 			done
 			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_menu_reduced is: ${deferral_timer_menu_reduced}"
-			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_menu_reduced_array is: ${deferral_timer_menu_reduced_array[*]}"
+			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_menu_reduced_array is:\n${deferral_timer_menu_reduced_array[*]}"
 			if [[ "${deferral_timer_menu_reduced}" == "TRUE" ]]; then
 				if [[ ${#deferral_timer_menu_reduced_array[@]} -gt 1 ]]; then
 					deferral_timer_menu_minutes="${deferral_timer_menu_reduced_array[*]}"
@@ -5819,10 +5829,12 @@ check_deadlines_days_date() {
 check_user_focus() {
 	user_focus_active="FALSE"
 	if [[ -n "${deadline_count_focus}" ]] || [[ -n "${deadline_days_focus}" ]] || [[ -n "${deadline_date_focus}" ]]; then
-		local focus_response
-		focus_response=$(plutil -extract data.0.storeAssertionRecords.0.assertionDetails.assertionDetailsModeIdentifier raw -o - "/Users/${current_user_account_name}/Library/DoNotDisturb/DB/Assertions.json" | grep -ic 'com.apple.')
-		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: focus_response is: ${focus_response}"
-		if [[ $focus_response -gt 0 ]]; then
+		local plutil_response
+		plutil_response=$(plutil -extract data.0.storeAssertionRecords.0.assertionDetails.assertionDetailsModeIdentifier raw -o - "/Users/${current_user_account_name}/Library/DoNotDisturb/DB/Assertions.json" 2>&1)
+		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: plutil_response is: ${plutil_response}"
+		if [[ $(echo "${plutil_response}" | grep -c 'permission') -gt 0 ]]; then
+			log_super "Warning: Unable to determine user Focus mode becaucse the process that started super doesn't have Full Disk Access permissions."
+		elif [[ $(echo "${plutil_response}" | grep -c 'com.apple.') -gt 0 ]]; then
 			log_super "Status: Focus or Do Not Disturb enabled for current user: ${current_user_account_name}."
 			user_focus_active="TRUE"
 		fi
@@ -5938,7 +5950,7 @@ check_software_update_status_cached() {
 	
 	# Check how long ago the last successful macOS software check update was.
 	local msu_last_sccessful_check_date
-	msu_last_sccessful_check_date=$(defaults read "${MSU_LOCAL_PLIST}" LastSuccessfulDate 2>/dev/null)
+	msu_last_sccessful_check_date=$(defaults read "${MSU_LOCAL_PLIST}" LastSuccessfulDate 2> /dev/null)
 	local msu_last_sccessful_check_epoch
 	[[ -n "${msu_last_sccessful_check_date}" ]] && msu_last_sccessful_check_epoch=$(date -j -u -f "%Y-%m-%d %H:%M:%S %z" "${msu_last_sccessful_check_date}" +%s)
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_last_sccessful_check_date is: ${msu_last_sccessful_check_date}"
@@ -5967,7 +5979,7 @@ check_software_update_status_cached() {
 	local deferral_restrictions_checksum
 	deferral_restrictions_checksum=$(get_pref "DeferralRestrictionsChecksum")
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_restrictions_checksum is: ${deferral_restrictions_checksum}"
-	if { [[ $deferral_restrictions_checksum -eq 0 ]] && [[ ! -f "${APPLICATION_ACCESS_MANAGED_PLIST}.plist" ]]; } || [[ "${deferral_restrictions_checksum}" == "$(md5 -q "${APPLICATION_ACCESS_MANAGED_PLIST}.plist" 2>/dev/null)" ]]; then
+	if { [[ $deferral_restrictions_checksum -eq 0 ]] && [[ ! -f "${APPLICATION_ACCESS_MANAGED_PLIST}.plist" ]]; } || [[ "${deferral_restrictions_checksum}" == "$(md5 -q "${APPLICATION_ACCESS_MANAGED_PLIST}.plist" 2> /dev/null)" ]]; then
 		local deferral_restrictions_cache
 		deferral_restrictions_cache=$(get_pref "DeferralRestrictionsCache")
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_restrictions_cache is: ${deferral_restrictions_cache}"
@@ -6004,7 +6016,7 @@ check_software_update_status_cached() {
 	local mdmclient_list_checksum_cache
 	mdmclient_list_checksum_cache=$(get_pref "MDMClientListChecksum")
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: mdmclient_list_checksum_cache is: ${mdmclient_list_checksum_cache}"
-	if [[ "${mdmclient_list_checksum_cache}" == "$(md5 -q "${MDMCLIENT_LIST_LOG}" 2>/dev/null)" ]]; then
+	if [[ "${mdmclient_list_checksum_cache}" == "$(md5 -q "${MDMCLIENT_LIST_LOG}" 2> /dev/null)" ]]; then
 		local mdmclient_available_cache
 		mdmclient_available_cache=$(get_pref "MDMClientAvailableCache")
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: mdmclient_available_cache is: ${mdmclient_available_cache}"
@@ -6031,7 +6043,7 @@ check_software_update_status_cached() {
 	macos_installers_list_checksum_cache=$(get_pref "MacOSInstallersListChecksum")
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: macos_installers_list_checksum_cache is: ${macos_installers_list_checksum_cache}"
 	if [[ -n "${macos_installers_list_checksum_cache}" ]]; then
-		if [[ "${macos_installers_list_checksum_cache}" == "$(md5 -q "${MACOS_INSTALLERS_LIST_LOG}" 2>/dev/null)" ]]; then
+		if [[ "${macos_installers_list_checksum_cache}" == "$(md5 -q "${MACOS_INSTALLERS_LIST_LOG}" 2> /dev/null)" ]]; then
 			macos_installers_list=$(sed -e '1,/^Identifier/d' -e '/^$/d' < "${MACOS_INSTALLERS_LIST_LOG}")
 		else
 			log_super "Status: The ${MACOS_INSTALLERS_LIST_LOG} has changed since last super workflow run, full software status check required."
@@ -6046,7 +6058,7 @@ check_software_update_status_cached() {
 	msu_list_checksum_cache=$(get_pref "MSUListChecksum")
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: msu_list_checksum_cache is: ${msu_list_checksum_cache}"
 	if [[ -n "${msu_list_checksum_cache}" ]]; then
-		if [[ "${msu_list_checksum_cache}" == "$(md5 -q "${MSU_LIST_LOG}" 2>/dev/null)" ]]; then
+		if [[ "${msu_list_checksum_cache}" == "$(md5 -q "${MSU_LIST_LOG}" 2> /dev/null)" ]]; then
 			msu_list=$(<"${MSU_LIST_LOG}")
 		else
 			log_super "Status: The ${MSU_LIST_LOG} has changed since last super workflow run, full software status check required."
@@ -6090,12 +6102,12 @@ reset_software_update_status() {
 	delete_pref_main "MDMClientAvailableCache"
 	delete_pref_main "MacOSInstallerDownloaded"
 	delete_pref_main "MacOSMSULabelDownloaded"
-	rm -f "${MDMCLIENT_LIST_LOG}" 2>/dev/null
+	rm -f "${MDMCLIENT_LIST_LOG}" 2> /dev/null
 	delete_pref_main "MacOSInstallersListChecksum"
-	rm -f "${MACOS_INSTALLERS_LIST_LOG}" 2>/dev/null
+	rm -f "${MACOS_INSTALLERS_LIST_LOG}" 2> /dev/null
 	delete_pref_main "MSUListChecksum" 
-	rm -f "${MSU_LIST_LOG}" 2>/dev/null
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file after reset_software_update_status: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2>/dev/null)"
+	rm -f "${MSU_LIST_LOG}" 2> /dev/null
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file after reset_software_update_status: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2> /dev/null)"
 }
 
 # Check for restrictions configuration profile deferrals and set ${deferral_restrictions_macOS_minor_updates}, ${deferral_restrictions_macOS_major_upgrades}, and ${deferral_restrictions_non_system_updates} accordingly.
@@ -6104,7 +6116,7 @@ check_deferral_restrictions() {
 	deferral_restrictions_macOS_minor_updates="FALSE"
 	deferral_restrictions_non_system_updates="FALSE"
 	if [[ -f "${APPLICATION_ACCESS_MANAGED_PLIST}.plist" ]]; then
-		set_pref_main "DeferralRestrictionsChecksum" "$(md5 -q "${APPLICATION_ACCESS_MANAGED_PLIST}.plist" 2>/dev/null)"
+		set_pref_main "DeferralRestrictionsChecksum" "$(md5 -q "${APPLICATION_ACCESS_MANAGED_PLIST}.plist" 2> /dev/null)"
 		local deferral_restrictions_response
 		deferral_restrictions_response=$(defaults read "${APPLICATION_ACCESS_MANAGED_PLIST}" 2>&1 | grep -E 'enforcedSoftware|forceDelayed' | tr -d ';')
 	fi
@@ -6142,7 +6154,7 @@ check_macos_beta_program() {
 	macos_beta_program="FALSE"
 	if [[ $macos_version_normalized -ge 130400 ]]; then
 		local mdmclient_response
-		mdmclient_response=$(/usr/libexec/mdmclient QueryDeviceInformation 2>/dev/null | grep 'IsDefaultCatalog')
+		mdmclient_response=$(/usr/libexec/mdmclient QueryDeviceInformation 2> /dev/null | grep 'IsDefaultCatalog')
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: mdmclient_response is:\n${mdmclient_response}"
 		if [[ $(echo "${mdmclient_response}" | grep -c '1') -eq 0 ]]; then
 			log_super "Status: This system is currently configured to receive macOS beta updates/upgrades."
@@ -6169,12 +6181,12 @@ check_macos_beta_program() {
 kick_softwareupdated() {
 	if [[ $macos_version_normalized -ge 140400 ]]; then
 		log_super "Warning: Apple no longer allows for restarting of software update services on macOS 14.4 or newer. The system may need to be restarted for software update to function properly."
-		defaults delete /Library/Preferences/com.apple.Softwareupdate.plist >/dev/null 2>&1
+		defaults delete /Library/Preferences/com.apple.Softwareupdate.plist > /dev/null 2>&1
 		return 0
 	fi
 	
 	log_super "Status: Restarting various softwareupdate daemon processes..."
-	defaults delete /Library/Preferences/com.apple.Softwareupdate.plist >/dev/null 2>&1
+	defaults delete /Library/Preferences/com.apple.Softwareupdate.plist > /dev/null 2>&1
 	
 	if ! launchctl kickstart -k "system/com.apple.mobile.softwareupdated"; then
 		log_super "Warning: Restarting mobile softwareupdate daemon didn't respond, trying again in 10 seconds..."
@@ -6228,7 +6240,7 @@ get_mdmclient_list() {
 	# If the mdmclient list completed, then collect information.
 	if [[ "${get_mdmclient_list_error}" == "FALSE" ]] && [[ "${get_mdmclient_list_timeout}" == "FALSE" ]]; then
 		mdmclient_list=$(sed -e '/^Available updates/q' < "${MDMCLIENT_LIST_LOG}")
-		set_pref_main "MDMClientListChecksum" "$(md5 -q "${MDMCLIENT_LIST_LOG}" 2>/dev/null)"
+		set_pref_main "MDMClientListChecksum" "$(md5 -q "${MDMCLIENT_LIST_LOG}" 2> /dev/null)"
 		if [[ $(echo "${mdmclient_list}" | grep -c 'OS Update Item') -gt 0 ]]; then
 			mdmclient_available="TRUE"
 			set_pref_main "MDMClientAvailableCache" "TRUE"
@@ -6238,7 +6250,7 @@ get_mdmclient_list() {
 	else # mdmclient list failures.
 		[[ "${get_mdmclient_list_error}" == "TRUE" ]] && log_super "mdmclient Error: Apple update listing failed, check ${MDMCLIENT_LIST_LOG} for more detail."
 		[[ "${get_mdmclient_list_timeout}" == "TRUE" ]] && log_super "mdmclient Error: Apple update listing failed to complete, as indicated by no progress after waiting for ${get_mdmclient_list_timeout_seconds} seconds."
-		kill -9 "${get_mdmclient_list_pid}" >/dev/null 2>&1
+		kill -9 "${get_mdmclient_list_pid}" > /dev/null 2>&1
 	fi
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: get_mdmclient_list_error is: ${get_mdmclient_list_error}"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: get_mdmclient_list_timeout is: ${get_mdmclient_list_timeout}"
@@ -6285,11 +6297,11 @@ get_macos_installers_list() {
 	# If the mist-cli list completed, then collect information.
 	if [[ "${get_macos_installers_list_error}" == "FALSE" ]] && [[ "${get_macos_installers_list_timeout}" == "FALSE" ]]; then
 		macos_installers_list=$(sed -e '1,/^Identifier/d' -e '/^$/d' < "${MACOS_INSTALLERS_LIST_LOG}")
-		set_pref_main "MacOSInstallersListChecksum" "$(md5 -q "${MACOS_INSTALLERS_LIST_LOG}" 2>/dev/null)"
+		set_pref_main "MacOSInstallersListChecksum" "$(md5 -q "${MACOS_INSTALLERS_LIST_LOG}" 2> /dev/null)"
 	else
 		[[ "${get_macos_installers_list_error}" == "TRUE" ]] && log_super "mist-cli Error: macOS installers listing failed, check ${MACOS_INSTALLERS_LIST_LOG} for more detail."
 		[[ "${get_macos_installers_list_timeout}" == "TRUE" ]] && log_super "mist-cli Error: macOS installers listing failed to complete, as indicated by no progress after waiting for ${get_macos_installers_list_timeout_seconds} seconds."
-		kill -9 "${get_macos_installers_list_pid}" >/dev/null 2>&1
+		kill -9 "${get_macos_installers_list_pid}" > /dev/null 2>&1
 	fi
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: get_macos_installers_list_error is: ${get_macos_installers_list_error}"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: get_macos_installers_list_timeout is: ${get_macos_installers_list_timeout}"
@@ -6333,11 +6345,11 @@ get_msu_list() {
 	# If the softwareupdate list completed, then collect information.
 	if [[ "${get_msu_list_error}" == "FALSE" ]] && [[ "${get_msu_list_timeout}" == "FALSE" ]]; then
 		msu_list=$(<"${MSU_LIST_LOG}")
-		set_pref_main "MSUListChecksum" "$(md5 -q "${MSU_LIST_LOG}" 2>/dev/null)"
+		set_pref_main "MSUListChecksum" "$(md5 -q "${MSU_LIST_LOG}" 2> /dev/null)"
 	else # softwareupdate list failures.
 		[[ "${get_msu_list_error}" == "TRUE" ]] && log_super "softwareupdate Error: macOS software update listing failed, check ${MSU_LIST_LOG} for more detail."
 		[[ "${get_msu_list_timeout}" == "TRUE" ]] && log_super "softwareupdate Error: macOS software update listing failed to complete, as indicated by no progress after waiting for ${get_msu_list_timeout_seconds} seconds."
-		kill -9 "${get_msu_list_pid}" >/dev/null 2>&1
+		kill -9 "${get_msu_list_pid}" > /dev/null 2>&1
 	fi
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: get_msu_list_error is: ${get_msu_list_error}"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: get_msu_list_timeout is: ${get_msu_list_timeout}"
@@ -6414,28 +6426,28 @@ workflow_check_software_status() {
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: mdmclient_sanitized_list is:\n${mdmclient_sanitized_list}"
 		
 		# Create arrays for available macOS and non-system updates.
-		local mdmclient_security_array
-		mdmclient_security_array=($(echo "${mdmclient_sanitized_list}" | grep -E 'XProtect|MRT|Gatekeeper' | uniq))
 		local mdmclient_macos_msu_array
 		mdmclient_macos_msu_array=($(echo "${mdmclient_sanitized_list}" | grep -E 'MSU_UPDATE' | uniq | sort -t ':' -k3 -V -r))
 		local mdmclient_macos_installer_array
 		mdmclient_macos_installer_array=($(echo "${mdmclient_sanitized_list}" | grep -Ev 'MSU_UPDATE' | grep -E 'macOS' | uniq | sort -t ':' -k3 -V -r))
 		local mdmclient_non_system_array
 		mdmclient_non_system_array=($(echo "${mdmclient_sanitized_list}" | grep -Ev 'macOS|XProtect|MRT|Gatekeeper' | uniq | sort -t ':' -k3 -V -r))
+		local mdmclient_security_array
+		mdmclient_security_array=($(echo "${mdmclient_sanitized_list}" | grep -E 'XProtect|MRT|Gatekeeper' | uniq))
 		
 		# Evaluate the numer of available updates and make sure there is at least one update available.
-		if [[ ${#mdmclient_macos_msu_array[@]} -eq 0 ]] && [[ ${#mdmclient_macos_installer_array[@]} -eq 0 ]] && [[ ${#mdmclient_non_system_array[@]} -eq 0 ]]; then
+		if [[ ${#mdmclient_macos_msu_array[@]} -eq 0 ]] && [[ ${#mdmclient_macos_installer_array[@]} -eq 0 ]] && [[ ${#mdmclient_non_system_array[@]} -eq 0 ]] && [[ ${#mdmclient_security_array[@]} -eq 0 ]]; then
 			log_super "Error: Parsing mdmclient available updates listing did not find any available or deferred updates."
 			workflow_check_software_status_error="TRUE"
 		fi
 	fi
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: mdmclient_security_array is:\n${mdmclient_security_array[*]}"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: mdmclient_macos_msu_array is:\n${mdmclient_macos_msu_array[*]}"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: mdmclient_macos_installer_array is:\n${mdmclient_macos_installer_array[*]}"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: mdmclient_non_system_array is:\n${mdmclient_non_system_array[*]}"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: mdmclient_security_array is:\n${mdmclient_security_array[*]}"
 	
 	# If (no errors) no installable updates then report any macOS security updates (that can't be installed programmatically) and then exit this function.
-	if [[ "${workflow_check_software_status_error}" == "FALSE" ]] && [[ ${#mdmclient_non_system_array[@]} -eq 0 ]] && [[ ${#mdmclient_macos_msu_array[@]} -eq 0 ]] && [[ ${#mdmclient_macos_installer_array[@]} -eq 0 ]]; then
+	if [[ "${workflow_check_software_status_error}" == "FALSE" ]] && [[ ${#mdmclient_macos_msu_array[@]} -eq 0 ]] && [[ ${#mdmclient_macos_installer_array[@]} -eq 0 ]] && [[ ${#mdmclient_non_system_array[@]} -eq 0 ]]; then
 		if [[ ${#mdmclient_security_array[@]} -gt 0 ]]; then
 			[[ "${msu_automatic_security_updates}" == "TRUE" ]] && log_super "Status: The following security updates are currently available and they should be installed soon via automatic macOS software udpate:"
 			[[ "${msu_automatic_security_updates}" == "FALSE" ]] && log_super "Warning: The following security updates are available but due to macOS software update settings are not allowed for installation:"
@@ -6845,7 +6857,7 @@ check_macos_msu_download() {
 
 # Returns the macOS marketing name, version, and build that will be installed given a macOS installer application path ${1}.
 get_macos_installer_info() {
-	[[ -d "/Volumes/Shared Support" ]] && diskutil unmount force "/Volumes/Shared Support" >/dev/null 2>&1
+	[[ -d "/Volumes/Shared Support" ]] && diskutil unmount force "/Volumes/Shared Support" > /dev/null 2>&1
 	if [[ -f "${1}/Contents/SharedSupport/SharedSupport.dmg" ]]; then
 		local hidiutil_response
 		hidiutil_response=$(hdiutil attach -quiet -noverify -nobrowse "${1}/Contents/SharedSupport/SharedSupport.dmg" 2>&1)
@@ -6856,9 +6868,9 @@ get_macos_installer_info() {
 				macos_installer_version_downloaded=$(/usr/libexec/PlistBuddy -c "Print :Assets:0:OSVersion" "/Volumes/Shared Support/com_apple_MobileAsset_MacSoftwareUpdate/com_apple_MobileAsset_MacSoftwareUpdate.xml")
 				local macos_installer_build_downloaded
 				macos_installer_build_downloaded=$(/usr/libexec/PlistBuddy -c "Print :Assets:0:Build" "/Volumes/Shared Support/com_apple_MobileAsset_MacSoftwareUpdate/com_apple_MobileAsset_MacSoftwareUpdate.xml")
-				diskutil unmount force "/Volumes/Shared Support" >/dev/null 2>&1
+				diskutil unmount force "/Volumes/Shared Support" > /dev/null 2>&1
 				if [[ -n "${macos_installer_version_downloaded}" ]] && [[ -n "${macos_installer_build_downloaded}" ]]; then
-					[[ -d "/Volumes/Shared Support" ]] && diskutil unmount force "/Volumes/Shared Support" >/dev/null 2>&1
+					[[ -d "/Volumes/Shared Support" ]] && diskutil unmount force "/Volumes/Shared Support" > /dev/null 2>&1
 					echo "$(basename "${1}" | sed -e 's/Install //g' -e 's/\..*//g') ${macos_installer_version_downloaded}-${macos_installer_build_downloaded}" && return 0
 				else
 					log_super "Error: Unable to resolve information for macOS installer located at: ${1}"
@@ -6909,7 +6921,7 @@ delete_unneeded_macos_installers() {
 	previous_ifs="${IFS}"
 	IFS=$'\n'
 	local macos_installer_local_paths_array
-	macos_installer_local_paths_array=($(mdfind kind:app -name "Install macOS" 2>/dev/null))
+	macos_installer_local_paths_array=($(mdfind kind:app -name "Install macOS" 2> /dev/null))
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: macos_installer_local_paths_array is:\n${macos_installer_local_paths_array[*]}"
 	if [[ -n "${macos_installer_local_paths_array[*]}" ]]; then
 		for macos_installer_path in "${macos_installer_local_paths_array[@]}"; do
@@ -6921,14 +6933,14 @@ delete_unneeded_macos_installers() {
 						log_super "Test Mode: macOS upgrades are not allowed, found unnecessary macOS installer at: ${macos_installer_path}"
 					else # Normal workflow.
 						log_super "Warning: macOS upgrades are not allowed, removing unnecessary macOS installer at: ${macos_installer_path}"
-						rm -Rf "${macos_installer_path}" >/dev/null 2>&1
+						rm -Rf "${macos_installer_path}" > /dev/null 2>&1
 					fi
 				elif [[ "${macos_installer_path}" != "/Applications/Install ${macos_installer_title}.app" ]] || [[ "$(get_macos_installer_info "${macos_installer_path}")" != "${macos_installer_title} ${macos_installer_version}-${macos_installer_build}" ]]; then
 					if [[ "${test_mode}" == "TRUE" ]]; then # Test mode.
 						log_super "Test Mode: Found incorrect version target macOS installer at: ${macos_installer_path}"
 					else # Normal workflow.
 						log_super "Warning: Removing incorrect version target macOS installer at: ${macos_installer_path}"
-						rm -Rf "${macos_installer_path}" >/dev/null 2>&1
+						rm -Rf "${macos_installer_path}" > /dev/null 2>&1
 					fi
 				fi
 			fi
@@ -6937,10 +6949,11 @@ delete_unneeded_macos_installers() {
 	IFS="${previous_ifs}"
 }
 
-# This function determines which macOS updates, upgrades, or installers have been downloaded and validates any previously downloaded macOS updates, upgrades, or installers and sets ${macos_installer_download_required}, ${macos_msu_download_required}, and ${macos_msu_automatic_download_deferral} accordingly.
+# This function determines which macOS updates, upgrades, or installers have been downloaded and validates any previously downloaded macOS updates, upgrades, or installers and sets ${macos_installer_download_required}, ${macos_msu_download_required}, ${macos_msu_download_error}, and ${macos_msu_automatic_download_deferral} accordingly.
 workflow_check_download_status() {
 	macos_installer_download_required="FALSE"
 	macos_msu_download_required="FALSE"
+	macos_msu_download_error="FALSE"
 	macos_msu_automatic_download_deferral="FALSE"
 	macos_msu_automatic_download_ramped="FALSE"
 	
@@ -6956,7 +6969,7 @@ workflow_check_download_status() {
 				[[ -z "${macos_installer_download}" ]] && log_super "Warning: Existing macOS installer failed local validations, removing installer: /Applications/Install ${macos_installer_title}.app."
 				macos_installer_download_required="TRUE"
 				delete_pref_main "MacOSInstallerDownloaded"
-				rm -Rf "/Applications/Install ${macos_installer_title}.app" >/dev/null 2>&1
+				rm -Rf "/Applications/Install ${macos_installer_title}.app" > /dev/null 2>&1
 			fi
 			set_pref_main "MacOSInstallerDownloaded" "${macos_installer_title} ${macos_installer_version}-${macos_installer_build}"
 		else # No local macOS installer.
@@ -6969,8 +6982,7 @@ workflow_check_download_status() {
 	
 	# If a softwareupdate is targeted then evaluate if there is a cached macOS update/upgrade.
 	if [[ "${macos_msu_major_upgrade_target}" != "FALSE" ]] || [[ "${macos_msu_minor_update_target}" != "FALSE" ]]; then
-		local macos_msu_downloaded_error
-		macos_msu_downloaded_error="FALSE"
+		
 		check_macos_msu_download
 		macos_msu_label_downloaded=$(get_pref "MacOSMSULabelDownloaded")
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: macos_msu_label_downloaded is: ${macos_msu_label_downloaded}"
@@ -6983,17 +6995,21 @@ workflow_check_download_status() {
 				log_metrics "MSU Download Complete: Workflow Elapsed Time" "WorkflowTargetTimestamp"
 				macos_msu_label_downloaded="${macos_msu_label}" && set_pref_main "MacOSMSULabelDownloaded" "${macos_msu_label}"
 			fi
-			[[ "${macos_msu_downloaded_version}" != "${macos_msu_version}" ]] && log_super "Warning: Previously downloaded macOS update/upgrade version ${macos_msu_downloaded_version} doesn't match workflow target version ${macos_msu_version}." && macos_msu_downloaded_error="TRUE"
+			if [[ "${macos_msu_downloaded_version}" != "${macos_msu_version}" ]]; then
+				log_super "Warning: Previously downloaded macOS update/upgrade version ${macos_msu_downloaded_version} doesn't match workflow target version ${macos_msu_version}."
+				macos_msu_download_required="TRUE"
+				macos_msu_download_error="TRUE"
+				unset macos_msu_label_downloaded
+				delete_pref_main "MacOSMSULabelDownloaded"
+			fi
 		else # No msu download is prepared.
-			macos_msu_downloaded_error="TRUE"
 			[[ -n "${macos_msu_label_downloaded}" ]] && log_super "Warning: Previously downloaded macOS update/upgrade is no longer valid."
-		fi
-		if [[ "${macos_msu_downloaded_error}" == "TRUE" ]]; then
 			macos_msu_download_required="TRUE"
 			unset macos_msu_label_downloaded
 			delete_pref_main "MacOSMSULabelDownloaded"
 		fi
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: macos_msu_download_required is: ${macos_msu_download_required}"
+		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: macos_msu_download_error is: ${macos_msu_download_error}"
 		
 		# If the target is a macOS minor update and it should have been downloaded automatically, then evaluate if the workflow should automatically defer.
 		if [[ "${macos_msu_minor_update_target}" != "FALSE" ]]; then
@@ -7127,12 +7143,13 @@ download_macos_msu() {
 				log_echo_replace_line "${macos_msu_title_downloaded} preparing progress: 100%\n"
 				log_msu "**** TIMESTAMP ****"
 				download_macos_msu_phase="DONE"
+				sleep 10
 			elif [[ $download_macos_msu_complete_perecent -gt $download_macos_msu_complete_perecent_previous ]]; then
 				download_macos_msu_complete_display=$(((download_macos_msu_complete_perecent - 60) * 2))
 				log_echo_replace_line "${macos_msu_title_downloaded} preparing progress: ${download_macos_msu_complete_display}%"
 				download_macos_msu_complete_perecent_previous=${download_macos_msu_complete_perecent}
 			fi
-		elif [[ $(echo "${log_line}" | grep -c 'Downloaded') -gt 0 ]]; then
+		elif [[ $(echo "${log_line}" | grep -c 'Downloaded') -gt 0 ]] || [[ "${download_macos_msu_phase}" == "DONE" ]]; then
 			macos_msu_title_downloaded=$(echo "${log_line}" | sed -e 's/://' -e 's/Downloaded //')
 			log_super_audit "softwareupdate: ${macos_msu_title_downloaded} download and preparation complete."
 			download_macos_msu_start_error="FALSE"
@@ -7210,7 +7227,7 @@ download_macos_msu() {
 		download_maocs_msu_error="TRUE"
 		macos_msu_download_required="TRUE"
 		delete_pref_main "MacOSMSULabelDownloaded"
-		kill -9 "${download_macos_msu_pid}" >/dev/null 2>&1
+		kill -9 "${download_macos_msu_pid}" > /dev/null 2>&1
 		kick_softwareupdated
 	fi
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: download_maocs_msu_error is: ${download_maocs_msu_error}"
@@ -7347,10 +7364,10 @@ download_macos_installer() {
 		else # "${download_macos_installer_validation_error}" == "TRUE"
 			log_installer "Error: macOS installer failed local validations, removing installer: /Applications/Install ${macos_installer_title}.app."
 			log_super "Error: macOS installer failed local validations, removing installer: /Applications/Install ${macos_installer_title}.app."
-			rm -Rf "/Applications/Install ${macos_installer_title}.app" >/dev/null 2>&1
+			rm -Rf "/Applications/Install ${macos_installer_title}.app" > /dev/null 2>&1
 		fi
 		log_installer "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - DOWNLOAD MACOS INSTALLER APP FAILED ****"
-		kill -9 "${download_macos_installer_mist_pid}" >/dev/null 2>&1
+		kill -9 "${download_macos_installer_mist_pid}" > /dev/null 2>&1
 		download_macos_installer_error="TRUE"
 		delete_pref_main "MacOSInstallerDownloaded"
 	fi
@@ -7366,15 +7383,20 @@ workflow_download_macos() {
 	download_macos_installer_error="FALSE"
 	download_maocs_msu_error="FALSE"
 	push_macos_mdm_download_error="FALSE"
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: macos_installer_download_required is: ${macos_installer_download_required}"
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: macos_msu_download_required is: ${macos_msu_download_required}"
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: macos_msu_automatic_download_deferral is: ${macos_msu_automatic_download_deferral}"
 	
 	# If downloads are required then check for possible automatic download deferral and available storage.
 	if [[ "${macos_installer_download_required}" == "TRUE" ]] || [[ "${macos_msu_download_required}" == "TRUE" ]]; then
 		# If a macOS automatic download should be possible then automatically defer.
 		if [[ "${macos_msu_automatic_download_deferral}" == "TRUE" ]]; then
-			if [[ "${workflow_install_now_active}" != "TRUE" ]] && [[ "${deadline_date_status}" == "FALSE" ]] && [[ "${deadline_days_status}" == "FALSE" ]] && [[ "${deadline_count_status}" == "FALSE" ]]; then
+			# First check for a vareity of reasons why the automatic download deferral should be ignored.
+			local ignore_macos_msu_automatic_download_deferral
+			ignore_macos_msu_automatic_download_deferral="FALSE"
+			[[ "${macos_msu_download_error}" == "TRUE" ]] && log_super "Warning: Ignoring automatic macOS minor update download deferral due an error with the previously downloaded macOS update." && ignore_macos_msu_automatic_download_deferral="TRUE"
+			[[ "${workflow_install_now_active}" == "TRUE" ]] && log_super "Warning: Ignoring automatic macOS minor update download deferral due to current install now workflow." && ignore_macos_msu_automatic_download_deferral="TRUE"
+			{ [[ -n "${deadline_epoch}" ]] && [[ $((deadline_epoch - workflow_time_epoch)) -le 86400 ]]; } && log_super "Warning: Ignoring automatic macOS minor update download deferral because a deadline is within 24 hours." && ignore_macos_msu_automatic_download_deferral="TRUE"
+			{ [[ "${deadline_date_status}" != "FALSE" ]] || [[ "${deadline_days_status}" != "FALSE" ]] || [[ "${deadline_count_status}" != "FALSE" ]]; } && log_super "Warning: Ignoring automatic macOS minor update download deferral due to current deadline workflow." && ignore_macos_msu_automatic_download_deferral="TRUE"
+			# Only defer the automatic download if the workflow can wait.
+			if [[ "${ignore_macos_msu_automatic_download_deferral}" == "FALSE" ]]; then
 				if [[ "${macos_msu_automatic_download_ramped}" != "FALSE" ]]; then
 					log_super "Warning: The target macOS minor update has not yet automatically downloaded to the system because it's being delayed by Apple's incremental rollout mechanism, trying again in ${deferral_timer_minutes} minutes."
 					log_status "Pending: The target macOS minor update has not yet automatically downloaded to the system because it's being delayed by Apple's incremental rollout mechanism, trying again in ${deferral_timer_minutes} minutes."
@@ -7383,9 +7405,6 @@ workflow_download_macos() {
 					log_status "Pending: The target macOS minor update has not yet automatically downloaded to the system, trying again in ${deferral_timer_minutes} minutes."
 				fi
 				set_auto_launch_deferral
-			else
-				[[ "${workflow_install_now_active}" == "TRUE" ]] && log_super "Warning: Ignoring automatic macOS minor update download deferral due to current install now workflow."
-				{ [[ "${deadline_date_status}" != "FALSE" ]] || [[ "${deadline_days_status}" != "FALSE" ]] || [[ "${deadline_count_status}" != "FALSE" ]]; } && log_super "Warning: Ignoring automatic macOS minor update download deferral due to current deadline workflow."
 			fi
 		fi
 		
@@ -7415,8 +7434,8 @@ workflow_download_macos() {
 	if [[ "${workflow_download_macos_error}" == "FALSE" ]] && [[ "${test_mode}" == "TRUE" ]] && [[ $macos_version_major -ge 14 ]] && [[ "${mac_cpu_architecture}" == "arm64" ]] && [[ "${workflow_macos_auth}" == "USER" ]]; then
 		local current_user_password_policies
 		local current_user_system_password_policies
-		[[ $(dscl . read "/Users/${current_user_account_name}" accountPolicyData 2>/dev/null | grep -c '<key>policies</key>') -gt 0 ]] && current_user_password_policies="TRUE"
-		[[ $(system_profiler SPConfigurationProfileDataType | grep -c 'passwordpolicy') -gt 0 ]] && current_user_system_password_policies="TRUE"
+		[[ $(dscl . read "/Users/${current_user_account_name}" accountPolicyData 2> /dev/null | grep -c '<key>policies</key>') -gt 0 ]] && current_user_password_policies="TRUE"
+		[[ $(system_profiler SPConfigurationProfileDataType 2> /dev/null | grep -c 'passwordpolicy') -gt 0 ]] && current_user_system_password_policies="TRUE"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: current_user_password_policies is: ${current_user_password_policies}"
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: current_user_system_password_policies is: ${current_user_system_password_policies}"
 		if [[ "${current_user_password_policies}" == "TRUE" ]] || [[ "${current_user_system_password_policies}" == "TRUE" ]]; then
@@ -7652,7 +7671,7 @@ install_non_system_msu() {
 			log_msu "Error: Installation of non-system macOS software updates failed, as indicated by no progress after waiting for ${install_non_system_msu_timeout_seconds} seconds."
 			log_super "Error: Installation of non-system macOS software updates failed, as indicated by no progress after waiting for ${install_non_system_msu_timeout_seconds} seconds."
 		fi
-		kill -9 "${install_msu_pid}" >/dev/null 2>&1
+		kill -9 "${install_msu_pid}" > /dev/null 2>&1
 		kick_softwareupdated
 	fi
 	IFS="${previous_ifs}"
@@ -7738,7 +7757,7 @@ install_safari_update_msu() {
 			log_msu "Error: Installation of Safari ${non_system_msu_safari_target} update failed, as indicated by no progress after waiting for ${install_safari_update_msu_timeout_seconds} seconds."
 			log_super "Error: Installation of Safari ${non_system_msu_safari_target} update failed, as indicated by no progress after waiting for ${install_safari_update_msu_timeout_seconds} seconds."
 		fi
-		kill -9 "${install_msu_pid}" >/dev/null 2>&1
+		kill -9 "${install_msu_pid}" > /dev/null 2>&1
 		kick_softwareupdated
 	fi
 }
@@ -7753,7 +7772,7 @@ install_macos_msu() {
 		if [[ "${current_user_account_name}" != "FALSE" ]]; then
 			log_super "Test Mode: Pausing ${test_mode_timeout_seconds} seconds for the restart notification..."
 			sleep "${test_mode_timeout_seconds}"
-			killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+			killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 		fi
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Calling reset_workflow() function."
 		reset_workflow
@@ -7924,7 +7943,7 @@ install_macos_msu() {
 			log_super "Error: Installation of macOS update/upgrade via softwareupdate failed while downloading/preparing, as indicated by no progress after waiting for ${install_macos_msu_timeout_seconds} seconds."
 		fi
 		log_msu "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - UPDATE/UPGRADE MACOS VIA SOFTWAREUPDATE FAILED ****"
-		kill -9 "${install_macos_msu_pid}" >/dev/null 2>&1
+		kill -9 "${install_macos_msu_pid}" > /dev/null 2>&1
 		kick_softwareupdated
 	
 		# Handle workflow failure options.
@@ -7957,7 +7976,7 @@ install_macos_app() {
 			notification_restart
 			log_super "Test Mode: Pausing ${test_mode_timeout_seconds} seconds for the restart notification..."
 			sleep "${test_mode_timeout_seconds}"
-			killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+			killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 		fi
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Calling reset_workflow() function."
 		reset_workflow
@@ -8040,7 +8059,7 @@ install_macos_app() {
 		[[ "${current_user_account_name}" != "FALSE" ]] && notification_restart
 	else # Some part of the startosinstall workflow failed.
 		log_installer "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - INSTALL MACOS FAILED ****"
-		kill -9 "${install_macos_app_pid}" >/dev/null 2>&1
+		kill -9 "${install_macos_app_pid}" > /dev/null 2>&1
 		if [[ "${install_macos_app_start_error}" == "TRUE" ]]; then
 			log_installer "Error: Installation of macOS installer application failed to start."
 			log_super "Error: Installation of macOS installer application failed to start."
@@ -8090,7 +8109,7 @@ push_macos_mdm() {
 			notification_restart
 			log_super "Test Mode: Pausing ${test_mode_timeout_seconds} seconds for the restart notification..."
 			sleep "${test_mode_timeout_seconds}"
-			killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+			killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 		fi
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Calling reset_workflow() function."
 		reset_workflow
@@ -8297,8 +8316,8 @@ push_macos_mdm() {
 				log_super "MDM: Received push command \"AvailableOSUpdates\"."
 				log_mdm_command "**** TIMESTAMP ****"
 			elif [[ $(echo "${log_line}" | grep -c 'Received HTTP response (200) \[Acknowledged(ScheduleOSUpdate)') -gt 0 ]]; then
-				kill -9 "${log_stream_mdm_command_pid}" >/dev/null 2>&1
-				[[ "${verbose_mode}" == "TRUE" ]] && kill -9 "${log_stream_mdm_command_debug_pid}" >/dev/null 2>&1
+				kill -9 "${log_stream_mdm_command_pid}" > /dev/null 2>&1
+				[[ "${verbose_mode}" == "TRUE" ]] && kill -9 "${log_stream_mdm_command_debug_pid}" > /dev/null 2>&1
 				[[ "${push_macos_mdm_workflow}" == "DOWNLOAD" ]] && log_mdm_command "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - DOWNLOAD MACOS VIA MDM COMMAND COMPLETED ****"
 				[[ "${push_macos_mdm_workflow}" == "DOWNLOAD" ]] && log_super "MDM: Received push command \"ScheduleOSUpdate\", local download should start soon..."
 				[[ "${push_macos_mdm_workflow}" == "INSTALL" ]] && log_mdm_command "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - INSTALL MACOS VIA MDM COMMAND COMPLETED ****"
@@ -8455,13 +8474,13 @@ push_macos_mdm() {
 	
 	# If the macOS update/upgrade completed, then prepare for restart.
 	if [[ "${auth_error_jamf}" == "FALSE" ]] && [[ "${push_macos_mdm_api_error}" == "FALSE" ]] && [[ "${push_macos_mdm_start_error}" == "FALSE" ]] && [[ "${push_macos_mdm_start_timeout}" == "FALSE" ]] && [[ "${push_macos_mdm_timeout_error}" == "FALSE" ]]; then
-		kill -9 "${log_stream_mdm_workflow_pid}" >/dev/null 2>&1
-		[[ "${verbose_mode}" == "TRUE" ]] && kill -9 "${log_stream_mdm_workflow_debug_pid}" >/dev/null 2>&1
+		kill -9 "${log_stream_mdm_workflow_pid}" > /dev/null 2>&1
+		[[ "${verbose_mode}" == "TRUE" ]] && kill -9 "${log_stream_mdm_workflow_debug_pid}" > /dev/null 2>&1
 		if [[ "${push_macos_mdm_workflow}" == "DOWNLOAD" ]]; then
 			local push_macos_mdm_download_validation_error
 			push_macos_mdm_download_validation_error="TRUE"
 			local update_asset_attributes
-			update_asset_attributes=$(defaults read /System/Volumes/Update/Update update-asset-attributes 2>/dev/null)
+			update_asset_attributes=$(defaults read /System/Volumes/Update/Update update-asset-attributes 2> /dev/null)
 			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: update_asset_attributes is:\n${update_asset_attributes}"
 			local macos_mdm_version_prepared
 			macos_mdm_version_prepared=$(echo "${update_asset_attributes}" | grep -w 'OSVersion' | awk -F '"' '{print $2;}')
@@ -8500,10 +8519,10 @@ push_macos_mdm() {
 	
 	# Handle MDM workflow failures.
 	if [[ "${auth_error_jamf}" == "TRUE" ]] || [[ "${push_macos_mdm_api_error}" == "TRUE" ]] || [[ "${push_macos_mdm_start_error}" == "TRUE" ]] || [[ "${push_macos_mdm_start_timeout}" == "TRUE" ]] || [[ "${push_macos_mdm_timeout_error}" == "TRUE" ]] || [[ "${push_macos_mdm_download_validation_error}" == "TRUE" ]]; then
-		kill -9 "${log_stream_mdm_command_pid}" >/dev/null 2>&1
-		[[ "${verbose_mode}" == "TRUE" ]] && kill -9 "${log_stream_mdm_command_debug_pid}" >/dev/null 2>&1
-		kill -9 "${log_stream_mdm_workflow_pid}" >/dev/null 2>&1
-		[[ "${verbose_mode}" == "TRUE" ]] && kill -9 "${log_stream_mdm_workflow_debug_pid}" >/dev/null 2>&1
+		kill -9 "${log_stream_mdm_command_pid}" > /dev/null 2>&1
+		[[ "${verbose_mode}" == "TRUE" ]] && kill -9 "${log_stream_mdm_command_debug_pid}" > /dev/null 2>&1
+		kill -9 "${log_stream_mdm_workflow_pid}" > /dev/null 2>&1
+		[[ "${verbose_mode}" == "TRUE" ]] && kill -9 "${log_stream_mdm_workflow_debug_pid}" > /dev/null 2>&1
 		if [[ "${push_macos_mdm_workflow}" == "DOWNLOAD" ]]; then
 			log_mdm_command "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - DOWNLOAD UPDATE/UPGRADE MACOS VIA MDM FAILED ****"
 			log_mdm_workflow "**** S.U.P.E.R.M.A.N. ${SUPER_VERSION} - DOWNLOAD UPDATE/UPGRADE MACOS VIA MDM FAILED ****"
@@ -8594,7 +8613,7 @@ workflow_install_non_system_msu() {
 		log_super "Test Mode: Skipping the install non-system macOS software updates workflow."
 		log_super "Test Mode: Pausing ${test_mode_timeout_seconds} seconds for the non-system macOS software updates notification..."
 		sleep "${test_mode_timeout_seconds}"
-		killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+		killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 		return 0
 	fi
 	
@@ -8615,7 +8634,7 @@ workflow_install_non_system_msu() {
 	[[ "${workflow_scheduled_install_active}" == "TRUE" ]] && delete_pref_main "WorkflowScheduledInstall"
 	if [[ "${install_non_system_msu_error}" == "FALSE" ]] && [[ "${non_system_msu_targets}" == "FALSE" ]]; then
 		log_super_audit "Status: Completed installation of all non-system macOS software updates!"
-		killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+		killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 		# For computers managed via Jamf Pro, submit inventory.
 		if [[ $jamf_version_normalized != "FALSE" ]]; then
 			if [[ "${auth_error_jamf}" != "TRUE" ]]; then
@@ -8625,7 +8644,7 @@ workflow_install_non_system_msu() {
 					jamf_response=$("${JAMF_PRO_BINARY}" recon -verbose 2>&1)
 					log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_response is:\n${jamf_response}"
 				else
-					"${JAMF_PRO_BINARY}" recon >/dev/null 2>&1
+					"${JAMF_PRO_BINARY}" recon > /dev/null 2>&1
 				fi
 			else # There was an earlier Jamf Pro validation error.
 				log_super "Warning: Unable to submit inventory to Jamf Pro."
@@ -8656,7 +8675,7 @@ workflow_install_safari_update_msu() {
 		log_super "Test Mode: Skipping the install Safari update workflow."
 		log_super "Test Mode: Pausing ${test_mode_timeout_seconds} seconds for the Safari update notification..."
 		sleep "${test_mode_timeout_seconds}"
-		killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+		killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 		return 0
 	fi
 	
@@ -8678,7 +8697,7 @@ workflow_install_safari_update_msu() {
 	if [[ "${install_safari_update_msu_error}" == "FALSE" ]] && [[ "${non_system_msu_safari_target}" == "FALSE" ]]; then
 		log_super_audit "Status: Completed installation of Safari update!"
 		if [[ "${current_user_account_name}" != "FALSE" ]] && [[ "${workflow_target_safari_active}" == "TRUE" ]]; then
-			killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+			killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 			sudo -u "${current_user_account_name}" open "/Applications/Safari.app" &
 		fi
 		# For computers managed via Jamf Pro, submit inventory.
@@ -8690,7 +8709,7 @@ workflow_install_safari_update_msu() {
 					jamf_response=$("${JAMF_PRO_BINARY}" recon -verbose 2>&1)
 					log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_response is:\n${jamf_response}"
 				else
-					"${JAMF_PRO_BINARY}" recon >/dev/null 2>&1
+					"${JAMF_PRO_BINARY}" recon > /dev/null 2>&1
 				fi
 			else # There was an earlier Jamf Pro validation error.
 				log_super "Warning: Unable to submit inventory to Jamf Pro."
@@ -8796,7 +8815,7 @@ workflow_install_no_user() {
 			set_pref_main "WorkflowRestartValidate" "TRUE"
 			[[ "${workflow_scheduled_install_active}" == "TRUE" ]] && delete_pref_main "WorkflowScheduledInstall"
 			log_super_audit "Status: Restarting computer in one minute..."
-			shutdown -o -r +1 >/dev/null 2>&1 &
+			shutdown -o -r +1 > /dev/null 2>&1 &
 			disown -a
 		else # Option to restart without updates is not enabled.
 			if [[ "${install_jamf_policy_triggers_without_restarting}" == "TRUE" ]] && [[ -n "${install_jamf_policy_triggers}" ]]; then
@@ -8945,12 +8964,12 @@ workflow_install_active_user() {
 				set_pref_main "WorkflowRestartValidate" "TRUE"
 				[[ "${workflow_scheduled_install_active}" == "TRUE" ]] && delete_pref_main "WorkflowScheduledInstall"
 				log_super_audit "Status: Restarting computer in one minute..."
-				shutdown -o -r +1 >/dev/null 2>&1 &
+				shutdown -o -r +1 > /dev/null 2>&1 &
 				disown -a
 			else # Test mode.
 				log_super "Test Mode: Pausing ${test_mode_timeout_seconds} seconds for the restart notification..."
 				sleep "${test_mode_timeout_seconds}"
-				killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+				killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 			fi
 		else # Option to restart without updates is not enabled.
 			if [[ "${install_jamf_policy_triggers_without_restarting}" == "TRUE" ]] && [[ -n "${install_jamf_policy_triggers}" ]]; then
@@ -9022,7 +9041,7 @@ workflow_restart_validate() {
 				jamf_response=$("${JAMF_PRO_BINARY}" recon -verbose 2>&1)
 				log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_response is:\n${jamf_response}"
 			else
-				"${JAMF_PRO_BINARY}" recon >/dev/null 2>&1
+				"${JAMF_PRO_BINARY}" recon > /dev/null 2>&1
 			fi
 			sleep 5
 			log_super "Status: Running Jamf Pro check-in policies. Use --verbose-mode or check /var/log/jamf.log for more detail..."
@@ -9030,7 +9049,7 @@ workflow_restart_validate() {
 				jamf_response=$("${JAMF_PRO_BINARY}" policy -verbose 2>&1)
 				log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_response is:\n${jamf_response}"
 			else
-				"${JAMF_PRO_BINARY}" policy >/dev/null 2>&1
+				"${JAMF_PRO_BINARY}" policy > /dev/null 2>&1
 			fi
 		else # There was an earlier Jamf Pro validation error.
 			deferral_timer_minutes="${DEFERRAL_TIMER_RESTART_VALIDATION_ERROR_MINUTES}"
@@ -9039,7 +9058,7 @@ workflow_restart_validate() {
 			set_auto_launch_deferral
 		fi
 	fi
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file after workflow_restart_validate: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2>/dev/null)"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file after workflow_restart_validate: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2> /dev/null)"
 }
 
 # MARK: *** Jamf Pro ***
@@ -9060,7 +9079,7 @@ check_jamf_management_framework() {
 			auth_error_jamf="TRUE"
 		else # Jamf Pro version is supported.
 			local jamf_response
-			jamf_response=$("${JAMF_PRO_BINARY}" checkJSSConnection -retry 1 2>/dev/null)
+			jamf_response=$("${JAMF_PRO_BINARY}" checkJSSConnection -retry 1 2> /dev/null)
 			if [[ $(echo "${jamf_response}" | grep -c 'available') -gt 0 ]]; then
 				jamf_management_url=$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
 				log_super "Status: Managed by Jamf Pro ${jamf_version_number_full} hosted at: ${jamf_management_url}"
@@ -9085,31 +9104,6 @@ check_jamf_management_framework() {
 			auth_error_jamf="TRUE"
 		fi
 	fi
-}
-
-# Use managed preferences or a jamf recon to resolve the computer's ${jamf_computer_id}.
-get_jamf_api_computer_id() {
-	jamf_computer_id=$(get_pref_managed "AuthJamfComputerID")
-	[[ -z "${jamf_computer_id}" ]] && jamf_computer_id=$(get_pref "AuthJamfComputerID")
-	# Resolve the computer's Jamf Pro ID via jamf recon.
-	if [[ -z "${jamf_computer_id}" ]]; then
-		log_super "Warning: Running Jamf Pro inventory to resolve the Jamf Pro Computer ID. To avoid this step use a configuration profile as covered in the super Wiki: https://github.com/Macjutsu/super/wiki/"
-		local jamf_response
-		local jamf_return
-		jamf_response=$("${JAMF_PRO_BINARY}" recon -verbose)
-		jamf_return="$?"
-		if [[ $jamf_return -eq 0 ]]; then
-			jamf_computer_id=$(echo "${jamf_response}" | grep '<computer_id>' | sed -e 's/[^0-9]*//g')
-			set_pref_main "AuthJamfComputerID" "${jamf_computer_id}"
-		else
-			log_super "Error: Jamf Pro inventory collection failed."
-			auth_error_jamf="TRUE"
-			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_response is:\n${jamf_response}"
-			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_return is: ${jamf_return}"
-		fi
-	fi
-	[[ ! "${jamf_computer_id}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]] && log_super "Error: Unable to resolve Jamf Pro Computer ID." && auth_error_jamf="TRUE"
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_computer_id is: ${jamf_computer_id}"
 }
 
 # Attempt to acquire a ${jamf_access_token} via ${auth_jamf_client} and ${auth_jamf_secret} credentials or via ${auth_jamf_account} and ${auth_jamf_password} credentials.
@@ -9152,32 +9146,79 @@ get_jamf_api_access_token() {
 	fi
 }
 
+# Use managed preferences or a jamf recon to resolve the computer's ${jamf_computer_id}.
+get_jamf_api_computer_id() {
+	jamf_computer_id=$(get_pref_managed "AuthJamfComputerID")
+	[[ -z "${jamf_computer_id}" ]] && jamf_computer_id=$(get_pref "AuthJamfComputerID")
+	if [[ -z "${jamf_computer_id}" ]]; then
+		log_super "Warning: Running Jamf Pro inventory to resolve the Jamf Pro Computer ID. To avoid this step use a configuration profile as covered in the super Wiki: https://github.com/Macjutsu/super/wiki/"
+		local jamf_response
+		local jamf_return
+		jamf_response=$("${JAMF_PRO_BINARY}" recon -verbose)
+		jamf_return="$?"
+		if [[ $jamf_return -eq 0 ]]; then
+			jamf_computer_id=$(echo "${jamf_response}" | grep '<computer_id>' | sed -e 's/[^0-9]*//g')
+		else
+			log_super "Error: Jamf Pro inventory collection failed."
+			auth_error_jamf="TRUE"
+			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_response is:\n${jamf_response}"
+			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_return is: ${jamf_return}"
+		fi
+		[[ "${jamf_computer_id}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]] && set_pref_main "AuthJamfComputerID" "${jamf_computer_id}"
+	fi
+	[[ ! "${jamf_computer_id}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]] && log_super "Error: Unable to resolve a valid Jamf Pro Computer ID." && auth_error_jamf="TRUE"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_computer_id is: ${jamf_computer_id}"
+}
+
+# Use managed preferences or the Jamf Pro API to resolve the computer's ${jamf_management_id}.
+get_jamf_api_management_id() {
+	jamf_management_id=$(get_pref_managed "AuthJamfManagementID")
+	[[ -z "${jamf_management_id}" ]] && jamf_management_id=$(get_pref "AuthJamfManagementID")
+	if [[ -z "${jamf_management_id}" ]]; then
+		log_super "Warning: Calling Jamf Pro API to resolve the Jamf Pro Management ID. To avoid this step use a configuration profile as covered in the super Wiki: https://github.com/Macjutsu/super/wiki/"
+		local curl_response
+		curl_response=$(curl --user-agent "${SUPER_USER_AGENT}" --silent --location --request GET --url "${jamf_api_url}api/v3/computers-inventory/${jamf_computer_id}?section=GENERAL" --header "accept: application/json" --header "Authorization: Bearer ${jamf_access_token}")
+		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: curl_response is:\n${curl_response}"
+		if [[ $macos_version_major -ge 15 ]]; then
+			jamf_management_id=$(echo "${curl_response}" | jq -r ".general.managementId")
+		else
+			jamf_management_id=$(echo "${curl_response}" | grep 'managementId' | awk -F '"' '{print $4}')
+		fi
+		[[ "${jamf_management_id}" =~ ${REGEX_VALID_UUID} ]] && set_pref_main "AuthJamfManagementID" "${jamf_management_id}"
+	fi
+	[[ ! "${jamf_management_id}" =~ ${REGEX_VALID_UUID} ]] && log_super "Error: Unable to resolve a valid Jamf Pro Management ID." && auth_error_jamf="TRUE"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_management_id is: ${jamf_management_id}"
+}
+
 # Use ${jamf_access_token} to attempt a Blank Push request to the Jamf Pro API at ${jamf_api_url}.
 send_jamf_api_blank_push() {
-	jamf_blank_push_response=$(curl --user-agent "${SUPER_USER_AGENT}" --silent --output /dev/null --write-out "%{http_code}" --location --request POST "${jamf_api_url}JSSResource/computercommands/command/BlankPush/id/${jamf_computer_id}" --header "Authorization: Bearer ${jamf_access_token}")
+	if [[ $jamf_version_normalized -ge 112800 ]]; then
+		local curl_json
+		curl_json='{ "clientManagementIds": [ "'${jamf_management_id}'" ] }'
+		jamf_blank_push_response=$(curl --user-agent "${SUPER_USER_AGENT}" --silent --output /dev/null --write-out "%{http_code}" --location --request POST --url "${jamf_api_url}api/v2/mdm/blank-push" --header "accept: application/json" --header "Authorization: Bearer ${jamf_access_token}" --header "content-type: application/json" --data "${curl_json}")
+	else
+		jamf_blank_push_response=$(curl --user-agent "${SUPER_USER_AGENT}" --silent --output /dev/null --write-out "%{http_code}" --location --request POST "${jamf_api_url}JSSResource/computercommands/command/BlankPush/id/${jamf_computer_id}" --header "Authorization: Bearer ${jamf_access_token}")
+	fi
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_blank_push_response is: ${jamf_blank_push_response}"
 }
 
 # Validate that the account ${auth_jamf_account} and ${auth_jamf_password} are valid credentials and has appropriate permissions to send MDM push commands. If not set ${auth_error_jamf}.
 check_jamf_api_credentials() {
 	auth_error_jamf="FALSE"
-	[[ -z "${jamf_computer_id}" ]] && get_jamf_api_computer_id
-	[[ "${auth_error_jamf}" == "TRUE" ]] && return 0
 	get_jamf_api_access_token
+	[[ "${auth_error_jamf}" == "FALSE" ]] && [[ -z "${jamf_computer_id}" ]] && get_jamf_api_computer_id
+	[[ "${auth_error_jamf}" == "FALSE" ]] && [[ $jamf_version_normalized -ge 112800 ]] && [[ -z "${jamf_management_id}" ]] && get_jamf_api_management_id
 	[[ "${auth_error_jamf}" == "TRUE" ]] && return 0
 	send_jamf_api_blank_push
-	[[ "${auth_error_jamf}" == "TRUE" ]] && return 0
-	if [[ "${jamf_blank_push_response}" != 201 ]]; then
-		log_super "Auth Error: Unable to request Blank Push via the Jamf Pro API. Verify that the provided Jamf Pro credentials has appropriate privileges: https://github.com/Macjutsu/super/wiki/Apple-Silicon-Jamf-Pro-API-Credentials#jamf-pro-api-account-privileges"
+	if [[ "${jamf_blank_push_response}" != 200 ]] && [[ "${jamf_blank_push_response}" != 201 ]]; then
+		log_super "Auth Error: Unable to request Blank Push via the Jamf Pro API. Verify that the provided Jamf Pro credentials has appropriate privileges: https://github.com/Macjutsu/super/wiki/"
 		auth_error_jamf="TRUE"
-		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_blank_push_response is:\n${jamf_blank_push_response}"
 	fi
 }
 
-# Validate existing ${jamf_access_token} and if found invalid, a new token is requested and again validated.
+# Validate existing ${jamf_access_token} and if found invalid, a new token is requested and again validated. If not set ${auth_error_jamf}.
 check_jamf_api_access_token() {
 	auth_error_jamf="FALSE"
-	[[ -z "${jamf_computer_id}" ]] && get_jamf_api_computer_id
-	[[ "${auth_error_jamf}" == "TRUE" ]] && return 0
 	local curl_response
 	if [[ -n "${jamf_access_token}" ]]; then
 		curl_response=$(curl --user-agent "${SUPER_USER_AGENT}" --silent --output /dev/null --write-out "%{http_code}" --location --request GET "${jamf_api_url}api/v1/auth" --header "Authorization: Bearer ${jamf_access_token}")
@@ -9185,6 +9226,8 @@ check_jamf_api_access_token() {
 	fi
 	if [[ $curl_response -ne 200 ]]; then
 		get_jamf_api_access_token
+		[[ "${auth_error_jamf}" == "FALSE" ]] && [[ -z "${jamf_computer_id}" ]] && get_jamf_api_computer_id
+		[[ "${auth_error_jamf}" == "FALSE" ]] && [[ $jamf_version_normalized -ge 112800 ]] && [[ -z "${jamf_management_id}" ]] && get_jamf_api_management_id
 		[[ "${auth_error_jamf}" == "TRUE" ]] && return 0
 		curl_response=$(curl --user-agent "${SUPER_USER_AGENT}" --silent --output /dev/null --write-out "%{http_code}" --location --request GET "${jamf_api_url}api/v1/auth" --header "Authorization: Bearer ${jamf_access_token}")
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: curl_response is:\n${curl_response}"
@@ -9252,7 +9295,7 @@ run_jamf_policy_triggers() {
 				log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_response is:\n${jamf_response}"
 				log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_return is: ${jamf_return}"
 			else
-				"${JAMF_PRO_BINARY}" policy -event "${jamf_policy_trigger}" >/dev/null 2>&1
+				"${JAMF_PRO_BINARY}" policy -event "${jamf_policy_trigger}" > /dev/null 2>&1
 				jamf_return="$?"
 			fi
 			if [[ $jamf_return -ne 0 ]]; then
@@ -9270,7 +9313,7 @@ run_jamf_policy_triggers() {
 		fi
 	done
 	IFS="${previous_ifs}"
-	{ [[ "${workflow_target}" == "Jamf Pro Policy Triggers Without Restarting" ]] && [[ "${current_user_account_name}" != "FALSE" ]]; } && killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+	{ [[ "${workflow_target}" == "Jamf Pro Policy Triggers Without Restarting" ]] && [[ "${current_user_account_name}" != "FALSE" ]]; } && killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 	
 	# Wrap-up Jamf Pro Policies workflow.
 	if [[ "${jamf_policy_error}" != "TRUE" ]]; then
@@ -9559,7 +9602,7 @@ set_deferral_menu() {
 			unset deferral_timer_minutes_schedule_workflow_active_adjusted
 		done
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_menu_adjusted is: ${deferral_timer_menu_adjusted}"
-		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_time_menu_adjusted_array is: ${deferral_time_menu_adjusted_array[*]}"
+		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_time_menu_adjusted_array is:\n${deferral_time_menu_adjusted_array[*]}"
 		if [[ "${deferral_timer_menu_adjusted}" == "TRUE" ]]; then
 			if [[ ${#deferral_time_menu_adjusted_array[@]} -gt 1 ]]; then
 				deferral_timer_menu_minutes=$(echo "${deferral_time_menu_adjusted_array[*]}" | tr ',' '\n' | uniq | tr '\n' ',' | sed -e 's/,$//')
@@ -9677,7 +9720,7 @@ open_notification_ibm_notifier() {
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: ibm_notifier_array is:\n${ibm_notifier_array[*]}"
 	
 	# Kill any previous notifications so new ones can take its place.
-	killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+	killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 	
 	# Start IBM Notifier and wait for for ${notification_response} and ${notification_return}.
 	unset notification_response
@@ -9772,7 +9815,7 @@ open_dialog_ibm_notifier() {
 					ibm_notifier_array+=(-secondary_accessory_view_type secureinput -secondary_accessory_view_payload "${display_accessory_secure_payload}" -timeout "${dialog_timeout_seconds}")
 				fi
 			else # Remaining ${dialog_type}s; REMINDER, SOFT.
-				[[ -n "${dialog_timeout_seconds}" ]] && ibm_notifier_array+=(-secondary_accessory_view_type timer -accessory_view_payload "${display_string_dialog_timeout} %@" -timeout "${dialog_timeout_seconds}")
+				[[ -n "${dialog_timeout_seconds}" ]] && ibm_notifier_array+=(-secondary_accessory_view_type timer -secondary_accessory_view_payload "${display_string_dialog_timeout} %@" -timeout "${dialog_timeout_seconds}")
 			fi
 		else # No custom display accessory.
 			if [[ "${dialog_type}" == "CHOICE" ]]; then
@@ -9795,7 +9838,7 @@ open_dialog_ibm_notifier() {
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: ibm_notifier_array is:\n${ibm_notifier_array[*]}"
 	
 	# Kill any previous notifications so new ones can take its place.
-	killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+	killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 	
 	# Start background metrics collection for IBM Notifier dialog.
 	log_metrics "Open Dialog $(echo "${dialog_type}" | sed -e 's/ALERT/Interactive Alert/' -e 's/CHOICE/User Choice/' -e 's/SCHEDULE/User Schedule/' -e 's/REMINDER/Schedule Reminder/' -e 's/SOFT/Soft Deadline/' -e 's/AUTH/User Authentication/'): Workflow Elapsed Time" "WorkflowTargetTimestamp"
@@ -9820,7 +9863,7 @@ open_dialog_ibm_notifier() {
 	local dialog_metrics_response
 	dialog_metrics_response=$(cat "${dialog_metrics_counter_fifo}")
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: dialog_metrics_response is: ${dialog_metrics_response}"
-	rm -Rf "${dialog_metrics_counter_fifo}" >/dev/null 2>&1
+	rm -Rf "${dialog_metrics_counter_fifo}" > /dev/null 2>&1
 	log_metrics "Close Dialog $(echo "${dialog_type}" | sed -e 's/ALERT/Interactive Alert/' -e 's/CHOICE/User Choice/' -e 's/SCHEDULE/User Schedule/' -e 's/REMINDER/Schedule Reminder/' -e 's/SOFT/Soft Deadline/' -e 's/AUTH/User Authentication/'): User Active Elapsed Time" "$(echo "${dialog_metrics_response}" | awk -F ':' '{print $1}')"
 	log_metrics "Close Dialog $(echo "${dialog_type}" | sed -e 's/ALERT/Interactive Alert/' -e 's/CHOICE/User Choice/' -e 's/SCHEDULE/User Schedule/' -e 's/REMINDER/Schedule Reminder/' -e 's/SOFT/Soft Deadline/' -e 's/AUTH/User Authentication/'): User Inactive Elapsed Time" "$(echo "${dialog_metrics_response}" | awk -F ':' '{print $2}')"
 	log_metrics "Close Dialog $(echo "${dialog_type}" | sed -e 's/ALERT/Interactive Alert/' -e 's/CHOICE/User Choice/' -e 's/SCHEDULE/User Schedule/' -e 's/REMINDER/Schedule Reminder/' -e 's/SOFT/Soft Deadline/' -e 's/AUTH/User Authentication/'): Dialog Elapsed Time" "$(echo "${dialog_metrics_response}" | awk -F ':' '{print $3}')"
@@ -10110,7 +10153,7 @@ dialog_insufficient_storage() {
 		if [[ "${check_storage_available_error}" == "FALSE" ]]; then
 			if [[ "${storage_ready}" == "TRUE" ]]; then
 				log_super "Status: Current available storage is now at ${storage_available_gigabytes} GBs, the macOS update/upgrade workflow can continue."
-				killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+				killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 				log_metrics "Dialog Insufficient Storage Success: Workflow Elapsed Time" "WorkflowTargetTimestamp"
 				break
 			fi
@@ -10195,7 +10238,7 @@ dialog_power_required() {
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: power_required_charger_connected: ${power_required_charger_connected}"
 		if [[ "${power_required_charger_connected}" == "TRUE" ]]; then
 			log_super "Status: AC power detected, the macOS update/upgrade workflow can continue."
-			killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+			killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 			log_metrics "Dialog Power Required Success: Workflow Elapsed Time" "WorkflowTargetTimestamp"
 			break
 		fi
@@ -10753,7 +10796,7 @@ dialog_user_auth() {
 				log_super "Status: Saved new --auth-ask-user-to-save-password credentials for current user: ${auth_local_account}"
 			else
 				log_super "Warning: Unable to validate keychain item for --auth-ask-user-to-save-password, deleting keychain item."
-				launchctl asuser "${current_user_id}" sudo -u "${current_user_account_name}" security delete-generic-password -a "super_auth_user_password" "/Users/${current_user_account_name}/Library/Keychains/login.keychain" >/dev/null 2>&1
+				launchctl asuser "${current_user_id}" sudo -u "${current_user_account_name}" security delete-generic-password -a "super_auth_user_password" "/Users/${current_user_account_name}/Library/Keychains/login.keychain" > /dev/null 2>&1
 			fi
 		elif [[ "${mdm_enrolled}" == "TRUE" ]] && [[ "${auth_error_bootstrap_token}" == "TRUE" ]] && { [[ "${auth_mdm_failover_to_user_status}" == "TRUE" ]] || [[ $(echo "${auth_mdm_failover_to_user}" | grep -c 'ERROR') -gt 0 ]]; }; then
 			bootstrap_token_attempt_fix="TRUE"
@@ -11252,7 +11295,7 @@ main() {
 			if [[ "${test_mode}" == "TRUE" ]]; then
 				log_super "Test Mode: Pausing ${test_mode_timeout_seconds} seconds for the install now up to date notification..."
 				sleep "${test_mode_timeout_seconds}"
-				killall -9 "IBM Notifier" "IBM Notifier Popup" >/dev/null 2>&1
+				killall -9 "IBM Notifier" "IBM Notifier Popup" > /dev/null 2>&1
 			fi
 		fi
 		# Wrap-up for ${workflow_only_download_active}.
@@ -11265,7 +11308,7 @@ main() {
 						jamf_response=$("${JAMF_PRO_BINARY}" recon -verbose 2>&1)
 						log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: jamf_response is:\n${jamf_response}"
 					else
-						"${JAMF_PRO_BINARY}" recon >/dev/null 2>&1
+						"${JAMF_PRO_BINARY}" recon > /dev/null 2>&1
 					fi
 				else # There was an earlier Jamf Pro validation error.
 					deferral_timer_minutes=$deferral_timer_error_minutes

@@ -1,5 +1,4 @@
 super 5.1.x	super 5.0.x	super 4.0.x	super 3.0
-<key>AuthJamfComputerID</key> <string>$JSSID</string>	<key>AuthJamfComputerID</key> <string>$JSSID</string>	<key>AuthJamfComputerID</key> <string>$JSSID</string>	<key>JamfProID</key> <string>$JSSID</string>
 <key>InstallMacOSMinorVersionTarget</key> <string>macOSVersionNumber</string>	N/A	N/A	N/A
 <key>InstallMacOSMajorUpgrades</key> <true/> | <false/>	<key>InstallMacOSMajorUpgrades</key> <true/> | <false/>	<key>InstallMacOSMajorUpgrades</key> <true/> | <false/>	<key>AllowUpgrade</key> <true/> | <false/>
 <key>InstallMacOSMajorVersionTarget</key> <string>macOSVersionNumber</string>	<key>InstallMacOSMajorVersionTarget</key> <string>IntegerNumber</string>	<key>InstallMacOSMajorVersionTarget</key> <string>IntegerNumber</string>	<key>TargetUpgrade</key> <string>IntegerNumber</string>
@@ -70,6 +69,8 @@ super 5.1.x	super 5.0.x	super 4.0.x	super 3.0
 <key>ConfigTempOverride</key> <true/> | <false/>	N/A	N/A	N/A
 <key>AuthAskUserToSavePassword</key> <true/> | <false/>	<key>AuthAskUserToSavePassword</key> <true/> | <false/>	<key>AuthAskUserToSavePassword</key> <true/> | <false/>	N/A
 <key>AuthJamfCustomURL</key> <string>URL</string>	<key>AuthJamfCustomURL</key> <string>URL</string>	<key>AuthJamfCustomURL</key> <string>URL</string>	N/A
+<key>AuthJamfComputerID</key> <string>$JSSID</string>	<key>AuthJamfComputerID</key> <string>$JSSID</string>	<key>AuthJamfComputerID</key> <string>$JSSID</string>	<key>JamfProID</key> <string>$JSSID</string>
+<key>AuthJamfManagementID</key> <string>$MANAGEMENTID</string>	N/A	N/A	N/A
 <key>AuthCredentialFailoverToUser</key> <true/> | <false/>	<key>AuthCredentialFailoverToUser</key> <true/> | <false/>	<key>AuthCredentialFailoverToUser</key> <true/> | <false/>	N/A
 "<key>AuthMDMFailoverToUser</key> <string>ALWAYS,DIALOG,DEADLINE,SCHEDULED,INSTALLNOW,ERROR</string>"	"<key>AuthMDMFailoverToUser</key> <string>ALWAYS,DIALOG,DEADLINE,SCHEDULED,INSTALLNOW,ERROR</string>"	"<key>AuthMDMFailoverToUser</key> <string>ALWAYS,NOSERVICE,SOFT,HARD,INSTALLNOW,BOOTSTRAP</string>"	"<key>UserAuthMDMFailover</key> <string>ALWAYS,NOSERVICE,SOFT,HARD,INSTALLNOW,BOOTSTRAP</string>"
 <key>TestMode</key> <true/> | <false/>	<key>TestMode</key> <true/> | <false/>	<key>TestMode</key> <true/> | <false/>	<key>TestMode</key> <true/> | <false/>

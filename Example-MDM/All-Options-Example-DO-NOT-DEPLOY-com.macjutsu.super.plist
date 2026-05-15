@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>AuthJamfComputerID</key>
-	<string>$JSSID</string>
 	<key>InstallMacOSMinorVersionTarget</key>
 	<string>14.7.8</string>
 	<key>InstallMacOSMajorUpgrades</key>
@@ -144,6 +142,10 @@
 	<true/>
 	<key>AuthJamfCustomURL</key>
 	<string>https://jamf-api.example.domain.com</string>
+	<key>AuthJamfComputerID</key>
+	<string>$JSSID</string>
+	<key>AuthJamfManagementID</key>
+	<string>$MANAGEMENTID</string>
 	<key>AuthCredentialFailoverToUser</key>
 	<true/>
 	<key>AuthMDMFailoverToUser</key>
