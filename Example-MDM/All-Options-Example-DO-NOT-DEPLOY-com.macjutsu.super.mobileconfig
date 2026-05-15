@@ -54,6 +54,8 @@
                   <string>$JSSID</string>
                   <key>AuthJamfCustomURL</key>
                   <string>https://jamf-api.example.domain.com</string>
+                  <key>AuthJamfManagementID</key>
+                  <string>$MANAGEMENTID</string>
                   <key>AuthMDMFailoverToUser</key>
                   <string>ERROR</string>
                   <key>ConfigCodeSignature</key>

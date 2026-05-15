@@ -4,5 +4,7 @@
 <dict>
 	<key>AuthJamfComputerID</key>
 	<string>$JSSID</string>
+	<key>AuthJamfManagementID</key>
+	<string>$MANAGEMENTID</string>
 </dict>
 </plist>

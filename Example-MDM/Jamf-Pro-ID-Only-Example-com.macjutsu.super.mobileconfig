@@ -11,7 +11,7 @@
     <key>PayloadIdentifier</key>
     <string>D1A08192-187F-4940-AB15-0623AD93B2BB</string>
     <key>PayloadDisplayName</key>
-    <string>S.U.P.E.R.M.A.N. Jamf Pro ID Only Example</string>
+    <string>super | Jamf Pro ID Only Example</string>
     <key>PayloadDescription</key>
     <string>This sends the computer's Jamf Pro ID for use by the super update script.</string>
     <key>PayloadVersion</key>
@@ -48,6 +48,8 @@
                 <dict>
                   <key>AuthJamfComputerID</key>
                   <string>$JSSID</string>
+                  <key>AuthJamfManagementID</key>
+                  <string>$MANAGEMENTID</string>
                 </dict>
               </dict>
             </array>
