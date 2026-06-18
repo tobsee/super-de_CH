@@ -1,8 +1,8 @@
 # CHANGELOG
 
-## [5.1.0-rc5]
+## [5.1.0-rc6]
 
-2026-05-15
+2026-06-16
 
 ## Highlights (5.1.x)
 
@@ -43,6 +43,17 @@
 - The `super` workflow does not currently support Declarative Device Management (DDM) software update settings. You should continue to use traditional MDM configuration profiles to enforce software update settings.
 - There are currently no publicly available [Background Security Improvement (BSI, formerly named Rapid Security Response) updates](https://support.apple.com/en-us/102657) for any version of macOS. As such, production BSI update workflows have not been validated against this version of `super`.
 - The [Jamf Pro new Managed Software Updates feature](https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-current/page/Updating_macOS_Groups_Using_Beta_Managed_Software_Updates.html) remains unreliable if the workflow target is not the latest minor update or major upgrade. In the mean time, the legacy Jamf Pro software update API remains stable (although deprecated) and local authentication is always the most reliable.
+
+### Specific Changes (5.1.0-rc6)
+
+- New [mist-cli 2.3](https://github.com/ninxsoft/mist-cli/releases/tag/v2.3) is automatically installed if required to facilitate macOS installer workflows. (Thanks to @ninxsoft for his dedication to the project!)
+- New debugging options allow you to test workflow targeting logic using previously generated *-list.log files. These debug options are enabled by manually specifying paths to previously generated *-list.log files via the following static parameters in the `super` script; `MDMCLIENT_LIST_DEBUG_LOG`, `MACOS_INSTALLERS_LIST_DEBUG_LOG`, and `MSU_LIST_DEBUG_LOG`.
+- Improved detection of errors in `softwareupdate --list` results.
+- Resolved an issue where making modifications to alternate configurations was unintentionally starting some non-standard `super` workflows (like the Install Now workflow).
+- Resolved an issue where the default deferral timer was not being selected when a menu deferral configuration was also enabled.
+- Updated [Jamf Pro External Application Custom Schema for `super` v5.1.0](https://github.com/Macjutsu/super/blob/main/Example-MDM/Jamf-Pro-External-Application-Custom-Schema-com.macjutsu.super-v5.1.0.json). (Huge thanks to @adrian-brown-91 and @tonyyo11 for updating this!)
+- As always, typo fixes and improvements to both regular and verbose log output.
+- `super` [5.1.0-rc5 SHA-256: 48984751d0d76fc28ea1419c0d3a35f5da201367ffde809f747e1892b69349d5](https://github.com/Macjutsu/super/blob/5.1.0-rc6/super.checksum.txt)
 
 ### Specific Changes (5.1.0-rc5)
 
