@@ -9,14 +9,21 @@
     "properties": {
         "AuthJamfComputerID": {
             "title": "Auth Jamf Computer ID",
-            "description": "Use this when using super with Jamf Pro API account.",
+            "description": "Use this when using super with Jamf Pro API account. Note:  If you are using Jamf Pro 11.28 with Jamf Pro API authentication workflows then you must deploy the new AuthJamfManagementID managed preference key.",
             "type": "string",
             "enum": ["$JSSID"],
             "default": "$JSSID"
         },
+        "AuthJamfManagementID": {
+            "title": "Auth Jamf Management ID",
+            "description": "Use this when using super with Jamf Pro API account. Required with Jamf Pro 11.28",
+            "type": "string",
+            "enum": ["$MANAGEMENTID"],
+            "default": "$MANAGEMENTID"
+        },
         "DeferralTimerDefault": {
             "title": "Default Defer Timer",
-            "description": "The number of minutes to defer until the next update attempt if a user chooses not to update restart. It must be between 2 and 1440. Default deferral time is 60. Put X to diasble this option.",
+            "description": "The number of minutes to defer until the next update attempt if a user chooses not to update restart. It must be between 2 and 1440. Default deferral time is 60. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -26,7 +33,7 @@
         },
         "DeferralTimerFocus": {
             "title": "Focus Defer Timer",
-            "description": "The number of minutes to defer the update restart dialog automatically if a process has prevented display sleep (for example, during an active meeting) or the user has Focus or Do Not Disturb enabled. It must be between 2 and 1440. Put X to diasble this option.",
+            "description": "The number of minutes to defer the update restart dialog automatically if a process has prevented display sleep (for example, during an active meeting) or the user has Focus or Do Not Disturb enabled. It must be between 2 and 1440. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -36,7 +43,7 @@
         },
         "DeferralTimerMenu": {
             "title": "Menu Defer Timer",
-            "description": "Display a deferral time pop-up menu in the non-deadline update restart dialog that allows the user to overide the DeferralTimerDefault time. It must be between 2 and 1440. Put X to diable this option.",
+            "description": "Display a deferral time pop-up menu in the non-deadline update restart dialog that allows the user to override the DeferralTimerDefault time. It must be between 2 and 1440. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -46,7 +53,7 @@
         },
         "DeferralTimerWorkflowRelaunch": {
             "title": "Workflow Relaunch Defer Timer",
-            "description": "The number of minutes to defer if no software updates are found. It must be between 2 and 43804. Put X to diable this option.",
+            "description": "The number of minutes to defer if no software updates are found. It must be between 2 and 43804. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -56,7 +63,7 @@
         },
         "DeferralTimerError": {
             "title": "Error Defer Timer",
-            "description": "The number of minutes to defer if super detects an error in the workflow (for example, network or MDM connectivity issues). It must be between 2 and 1440. Default deferral time is 60. Put X to diasble this option.",
+            "description": "The number of minutes to defer if super detects an error in the workflow (for example, network or MDM connectivity issues). It must be between 2 and 1440. Default deferral time is 60. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -102,37 +109,37 @@
         },
         "DeadlineCountFocus": {
             "title": "Focus Count Deadline",
-            "description": "The maximum number of automatic deferrals allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep (for example, during an active meeting). Put X to diable this option.",
+            "description": "The maximum number of automatic deferrals allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep (for example, during an active meeting). Put X to disable this option.",
             "type": "string"
         },
         "DeadlineCountSoft": {
             "title": "Soft Count Deadline",
-            "description": "The maximum number of user selected deferrals allowed before the soft deadline automatically restarts for updates without asking the user for approval. Put X to diable this option.",
+            "description": "The maximum number of user selected deferrals allowed before the soft deadline automatically restarts for updates without asking the user for approval. Put X to disable this option.",
             "type": "string"
         },
         "DeadlineCountHard": {
             "title": "Hard Count Deadline",
-            "description": "The maximum number of user selected deferrals allowed before the computer automatically restarts for updates without asking the user for approval. Put X to diable this option.",
+            "description": "The maximum number of user selected deferrals allowed before the computer automatically restarts for updates without asking the user for approval. Put X to disable this option.",
             "type": "string"
         },
         "DeadlineDaysFocus": {
             "title": "Focus Days Deadline",
-            "description": "The maximum number of days that automatic deferrals are allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep (for example, during an active meeting). Put X to diable this option.",
+            "description": "The maximum number of days that automatic deferrals are allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep (for example, during an active meeting). Put X to disable this option.",
             "type": "string"
         },
         "DeadlineDaysSoft": {
             "title": "Soft Days Deadline",
-            "description": "The maximum number of days allowed before the soft deadline dialog. The soft deadline is an interactive update restart dialog indicating that no more deferrals are allowed. Put X to diable this option.",
+            "description": "The maximum number of days allowed before the soft deadline dialog. The soft deadline is an interactive update restart dialog indicating that no more deferrals are allowed. Put X to disable this option.",
             "type": "string"
         },
         "DeadlineDaysHard": {
             "title": "Hard Days Deadline",
-            "description": "The maximum number of days allowed before the computer automatically restarts for updates without asking the user for approval. Put X to diable this option.",
+            "description": "The maximum number of days allowed before the computer automatically restarts for updates without asking the user for approval. Put X to disable this option.",
             "type": "string"
         },
         "ScheduleWorkflowActive": {
             "title": "Schedule Workflow Active",
-            "description": " allows you to define multiple weekday time frames that specify when the super workflow is allowed to be active (aka maintenance windows). Each schedule workflow active time frame must be specified using the following format DAY:hh:mm-hh:mm where weekdays are defined as MON|TUE|WED|THU|FRI|SAT|SUN and times are in 24-hour format. Multiple ranges are separated by a comma with no spaces.",
+            "description": "Allows you to define multiple weekday time frames that specify when the super workflow is allowed to be active (aka maintenance windows). Each schedule workflow active time frame must be specified using the following format DAY:hh:mm-hh:mm where weekdays are defined as MON|TUE|WED|THU|FRI|SAT|SUN and times are in 24-hour format. Multiple ranges are separated by a comma with no spaces.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -152,12 +159,12 @@
         },
         "ScheduleDeferredStartDays": {
             "title": "Schedule Deferred Start Days",
-            "description": "Automatically defers the workflow until the specified number of days has passed since the zero date. Simliar to the native macOS update/upgrade deferral mechanism, this option prevents super from interrupting the user (or if there is no user, from automatically installing) until after the deferred start number of days has passed.",
+            "description": "Automatically defers the workflow until the specified number of days has passed since the zero date. Similiar to the native macOS update/upgrade deferral mechanism, this option prevents super from interrupting the user (or if there is no user, from automatically installing) until after the deferred start number of days has passed.",
             "type": "string"
         },
         "ScheduleZeroDateManual": {
             "title": "Manual Zero Day Workflow Date",
-            "description": "Instead of having the days deadline counter, automatically select the day zero date. PutX to diable this option.",
+            "description": "Instead of having the days deadline counter, automatically select the day zero date. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -195,7 +202,7 @@
         },
         "DeadlineDateFocus": {
             "title": "Focus Date Deadline",
-            "description": "This is the last date and time when automatic deferrals are allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep (for example, during an active meeting). Put X to diable this option.",
+            "description": "This is the last date and time when automatic deferrals are allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep (for example, during an active meeting). Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -215,7 +222,7 @@
         },
         "DeadlineDateHard": {
             "title": "Hard Date Deadline",
-            "description": "If this date has passed, the computer restarts and udpates without asking the user for approval. Put X to diable this option.",
+            "description": "If this date has passed, the computer restarts and updates without asking the user for approval. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -235,7 +242,7 @@
         },
         "DialogTimeoutUserChoice": {
             "title": "User Choice Restart or Defer Display Timeout",
-            "description": "Sets an automatic timeout for interactive update restart dialogs in seconds. The countdown of the timeout is displayed in the update restart dialog. Put X to diable this option.",
+            "description": "Sets an automatic timeout for interactive update restart dialogs in seconds. The countdown of the timeout is displayed in the update restart dialog. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -245,7 +252,7 @@
         },
         "DialogTimeoutUserSchedule": {
             "title": "User Choice Dialog Schedule",
-            "description": "Sets an automatic timeout for interactive update restart dialogs in seconds. The countdown of the timeout is displayed in the update restart dialog. Put X to diable this option.",
+            "description": "Sets an automatic timeout for interactive update restart dialogs in seconds. The countdown of the timeout is displayed in the update restart dialog. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -255,12 +262,12 @@
         },
         "DialogTimeoutSoftDeadline": {
             "title": "Soft Display Timeout",
-            "description": "Sets an automatic timeout for interactive update restart dialogs in seconds. The countdown of the timeout is displayed in the update restart dialog. Put X to diable this option.",
+            "description": "Sets an automatic timeout for interactive update restart dialogs in seconds. The countdown of the timeout is displayed in the update restart dialog. Put X to disable this option.",
             "type": "string"
         },
         "DisplayUnmovable": {
             "title": "Display Unmovable Dialogs and Notifications",
-            "description": "Prevents the user from moving dialogs and notifications. Put X to diable this option.",
+            "description": "Prevents the user from moving dialogs and notifications. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -270,7 +277,7 @@
         },
         "DisplayHideBackground": {
             "title": "Display Hide Background",
-            "description": "Hide the background while displaying super dialogs and notifications. Using this option hides all other windows (including full screen mode) and the background via blur effect while displaying super dialogs and notifications. Put X to diable this option.",
+            "description": "Hide the background while displaying super dialogs and notifications. Using this option hides all other windows (including full screen mode) and the background via blur effect while displaying super dialogs and notifications. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -280,7 +287,7 @@
         },
         "DisplayHideProgressBar": {
             "title": "Display Hide Progress Bar",
-            "description": "This option hides the animated progress bar (as opposed showing it) for notifications and alerts. Put X to diable this option.",
+            "description": "This option hides the animated progress bar (as opposed showing it) for notifications and alerts. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -290,7 +297,7 @@
         },
         "DisplayNotificationsCentered": {
             "title": "Display Notifications Centered",
-            "description": "Shows non-interactive notifications in the center of the screen as opposed to the top right. Put X to diable this option.",
+            "description": "Shows non-interactive notifications in the center of the screen as opposed to the top right. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -356,7 +363,7 @@
             }
         },
         "DisplayAccessoryMacOSMinorUpdateFile": {
-            "title": "Minor Updates Updates Accessory File",
+            "title": "Minor Updates Accessory File",
             "description": "Local path or http(s) URL to a file that is the accessory to display when performing macOS updates. Put X to reset this to default.",
             "type": "string",
             "options": {
@@ -377,7 +384,7 @@
         },
         "DisplayAccessoryNonSystemUpdatesFile": {
             "title": "Non-System Updates Accessory File",
-            "description": "Local path or http(s) URL to a file that is the accessory to display when the InstallNonSystemUpdatesWithoutRestarting payload option is also enabled and the workflow target is only non-system updates. Put X to reset this to default.",
+            "description": "Local path or http(s) URL to a file that is the accessory to display when the InstallNonSystemUpdatesWithoutRestarting payload option is also enabled, and the workflow target is only non-system updates. Put X to reset this to default.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -387,7 +394,7 @@
         },
     	"DisplayAccessorySafariUpdateFile": {
             "title": "Safari Updates Accessory File",
-            "description": "Local path or http(s) URL to a file that is the accessory to display when the InstallSafariUpdateWithoutRestarting payload option is also enabled and the workflow target is only non-system updates. Put X to reset this to default.",
+            "description": "Local path or http(s) URL to a file that is the accessory to display when the InstallSafariUpdateWithoutRestarting payload option is also enabled, and the workflow target is only non-system updates. Put X to reset this to default.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -397,7 +404,7 @@
         },
         "DisplayAccessoryJamfPolicyTriggersFile": {
             "title": "Jamf Policy Accessory File",
-            "description": "Local path or http(s) URL to a file that is the accessory to display when the InstallJamfPolicyTriggers payload option is also enabled and the workflow target is only Jamf Pro Policy Triggers. Put X to reset this to default.",
+            "description": "Local path or http(s) URL to a file that is the accessory to display when the InstallJamfPolicyTriggers payload option is also enabled, and the workflow target is only Jamf Pro Policy Triggers. Put X to reset this to default.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -407,7 +414,7 @@
         },
         "DisplayAccessoryRestartWithoutUpdatesFile": {
             "title": "Restart Without Updates Accessory File",
-            "description": "Local path or http(s) URL to a file that is the accessory to display when the WorkflowRestartWithoutUpdates payload option is also enabled and the workflow target is only a forced restart without any updates. Put X to reset this to default.",
+            "description": "Local path or http(s) URL to a file that is the accessory to display when the WorkflowRestartWithoutUpdates payload option is also enabled, and the workflow target is only a forced restart without any updates. Put X to reset this to default.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -473,7 +480,7 @@
         },
         "ConfigCodeSignature": {
             "title": "Config Code Signature",
-            "description": "Enforces the use of code signed alternate configuration preference files. If this key is present then the super workflow will only accept alternate configuration preference files that are code signed and match the specified identifier. Both Apple Bundle and Apple Team identifiers are supported.",
+            "description": "Enforces the use of code signed alternate configuration preference files. If this key is present, then the super workflow will only accept alternate configuration preference files that are code signed and match the specified identifier. Both Apple Bundle and Apple Team identifiers are supported.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -483,7 +490,7 @@
         },
         "ConfigCodeSignature": {
             "title": "Config Code Signature",
-            "description": "Enforces the use of code signed alternate configuration preference files. If this key is present then the super workflow will only accept alternate configuration preference files that are code signed and match the specified identifier. Both Apple Bundle and Apple Team identifiers are supported.",
+            "description": "Enforces the use of code signed alternate configuration preference files. If this key is present, then the super workflow will only accept alternate configuration preference files that are code signed and match the specified identifier. Both Apple Bundle and Apple Team identifiers are supported.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -499,7 +506,7 @@
         },
         "AuthMDMFailoverToUser": {
             "title": "User Authentication MDM Failover",
-            "description": "The MDM workflow can be unreliable due to its complexity, and super will automatically try again upon failure, however this settings allows super to try other options. For more information see https://github.com/Macjutsu/super/wiki/Apple-Silicon-Jamf-Pro-API-Credentials#user-authentication-mdm-failover. Put X to diable this option.",
+            "description": "The MDM workflow can be unreliable due to its complexity, and super will automatically try again upon failure, however this setting allows super to try other options. For more information see https://github.com/Macjutsu/super/wiki/Apple-Silicon-Jamf-Pro-API-Credentials#user-authentication-mdm-failover. Put X to disable this option.",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -508,7 +515,7 @@
             }
         },
         "AuthCredentialFailoverToUser": {
-            "title": "Credential Authentication Failover To User",
+            "title": "Credential Authentication Failover to User",
             "description": "If any managed automatic authentication method fails validation, then failover to local end user authentication.",
             "type": "boolean",
             "default": "false"
@@ -600,7 +607,7 @@
         },
         "TestBatteryLevel": {
             "title": "Test BatteryLevel",
-            "description": "Minmum Battery Percentage",
+            "description": "Minimum Battery Percentage",
             "type": "string",
             "options": {
                 "inputAttributes": {
@@ -629,7 +636,7 @@
             }
         },
         "InstallJamfPolicyTriggersWithoutRestarting": {
-            "title": "Install Jamf Policies Without A Restart",
+            "title": "Install Jamf Policies Without a Restart",
             "description": " Allows for installation of Jamf Pro Policies even if there are no available macOS updates/upgrades.",
             "type": "boolean"
         },

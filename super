@@ -8,9 +8,9 @@
 # shellcheck disable=SC2012,SC2024,SC2207
 
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
-SUPER_VERSION="5.1.0-rc5"
+SUPER_VERSION="5.1.0-rc6"
 readonly SUPER_VERSION
-SUPER_DATE="2026/05/15"
+SUPER_DATE="2026/06/18"
 readonly SUPER_DATE
 SUPER_USER_AGENT="super/${SUPER_VERSION} $(curl --version | head -1 | sed -e 's/curl /curl\//')"
 readonly SUPER_USER_AGENT
@@ -469,13 +469,25 @@ set_defaults() {
 	MDMCLIENT_LIST_LOG="${SUPER_LOG_FOLDER}/mdmclient-list.log"
 	readonly MDMCLIENT_LIST_LOG
 	
+	# OPTIONAL path to an existing static mdmclient-list.log for debugging and testing only. Leave this value empty for the default workflow behavior:
+	MDMCLIENT_LIST_DEBUG_LOG=""
+	readonly MDMCLIENT_LIST_DEBUG_LOG
+	
 	# Path to the log for the current "mist list" command response:
 	MACOS_INSTALLERS_LIST_LOG="${SUPER_LOG_FOLDER}/macos-installers-list.log"
 	readonly MACOS_INSTALLERS_LIST_LOG
 	
+	# OPTIONAL path to an existing static macos-installers-list.log for debugging and testing only. Leave this value empty for the default workflow behavior:
+	MACOS_INSTALLERS_LIST_DEBUG_LOG=""
+	readonly MACOS_INSTALLERS_LIST_DEBUG_LOG
+	
 	# Path to the log for the current "softwareupdate --list" command response:
 	MSU_LIST_LOG="${SUPER_LOG_FOLDER}/msu-list.log"
 	readonly MSU_LIST_LOG
+	
+	# OPTIONAL path to an existing static msu-list.log for debugging and testing only. Leave this value empty for the default workflow behavior:
+	MSU_LIST_DEBUG_LOG=""
+	readonly MSU_LIST_DEBUG_LOG
 	
 	# URL to the default SOFA macOS machine readable json feed:
 	SOFA_MACOS_DEFAULT_URL="https://sofafeed.macadmins.io/v1/macos_data_feed.json"
@@ -537,11 +549,11 @@ set_defaults() {
 	readonly IBM_NOTIFIER_BINARY
 	
 	# URL to the mist-cli package installer:
-	MIST_CLI_DOWNLOAD_URL="https://github.com/ninxsoft/mist-cli/releases/download/v2.2/mist-cli.2.2.pkg"
+	MIST_CLI_DOWNLOAD_URL="https://github.com/ninxsoft/mist-cli/releases/download/v2.3/mist-cli.2.3.pkg"
 	readonly MIST_CLI_DOWNLOAD_URL
 	
 	# Target version for mist-cli:
-	MIST_CLI_TARGET_VERSION="2.2"
+	MIST_CLI_TARGET_VERSION="2.3"
 	readonly MIST_CLI_TARGET_VERSION
 	
 	# Path to the local mist-cli binary:
@@ -1362,6 +1374,14 @@ manage_parameter_options() {
 	local extract_hours
 	local extract_minutes
 	parameter_error="FALSE"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_edit_main_option is: ${config_edit_main_option}"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_edit_option is: ${config_edit_option}"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_clone_option is: ${config_clone_option}"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_delete_option is: ${config_delete_option}"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_delete_all_option is: ${config_delete_all_option}"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_start_default_option is: ${config_start_default_option}"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_start_temp_option is: ${config_start_temp_option}"
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_status_option is: ${config_status_option}"
 	config_temp_override=$(get_pref_managed "ConfigTempOverride")
 	[[ -z "${config_temp_override}" ]] && config_temp_override="FALSE"
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: config_temp_override: ${config_temp_override}"
@@ -4057,58 +4077,6 @@ workflow_startup() {
 		exit_error
 	fi
 	
-	# Initial preparation for various workflow modes. This enforces a hierarchy of workflows as follows: Restart Validate > Install Now > Scheduled Installation > Only Download > Default Workflow.
-	[[ "${test_mode}" == "TRUE" ]] && log_super "Status: Test mode active with ${test_mode_timeout_seconds} second timeout."
-	if [[ $(get_pref "WorkflowRestartValidate") == "TRUE" ]]; then
-		log_super "Status: Restart validation workflow active."
-		workflow_restart_validate_active="TRUE"
-	elif [[ "${workflow_install_now}" == "TRUE" ]]; then
-		log_super "Status: Install now workflow active."
-		workflow_install_now_active="TRUE"
-		[[ $(echo "${display_unmovable}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_unmovable_status="TRUE"
-		[[ $(echo "${display_hide_background}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_hide_background_status="TRUE"
-		[[ $(echo "${display_silently}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_silently_status="TRUE"
-		[[ $(echo "${display_hide_progress_bar}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_hide_progress_bar_status="TRUE"
-		[[ $(echo "${display_notifications_centered}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_notifications_centered_status="TRUE"
-		if [[ "${current_user_account_name}" != "FALSE" ]]; then
-			notification_install_now_start
-			if [[ "${test_mode}" == "TRUE" ]]; then
-				log_super "Test Mode: Pausing ${test_mode_timeout_seconds} seconds for the install now start notification..."
-				sleep "${test_mode_timeout_seconds}"
-			fi
-		fi
-		if [[ $(get_pref "WorkflowScheduledInstall") == "TRUE" ]]; then
-			log_super "Warning: Removing previously scheduled installation workflow due to current install now workflow."
-			delete_pref_main "WorkflowScheduledInstall"
-		fi
-	elif [[ $(get_pref "WorkflowScheduledInstall") =~ ${REGEX_DATE_HOURS_MINUTES} ]]; then
-		workflow_scheduled_install=$(get_pref "WorkflowScheduledInstall")
-		log_super "Status: Previously scheduled installation workflow active for: ${workflow_scheduled_install}"
-		workflow_scheduled_install_active="TRUE"
-	elif [[ "${workflow_only_download}" == "TRUE" ]]; then
-		log_super "Status: Only download workflow active."
-		workflow_only_download_active="TRUE"
-	fi
-	{ [[ "${workflow_only_download_active}" != "TRUE" ]] && [[ -n "${install_jamf_policy_triggers}" ]]; } && log_super "Status: Jamf Pro Policy triggers: ${install_jamf_policy_triggers}"
-	[[ "${install_jamf_policy_triggers_without_restarting}" == "TRUE" ]] && log_super "Warning: Install Jamf Pro Policy Triggers without restarting is enabled, this computer will run Jamf Pro Policies even if there is no macOS update or upgrade available."
-	[[ "${workflow_restart_without_updates}" == "TRUE" ]] && log_super "Warning: Restart without updates workflow is enabled, this computer will restart even if there is no macOS update or upgrade available."
-	workflow_reset_super_after_completion_active="FALSE"
-	if [[ "${workflow_reset_super_after_completion_option}" == "FALSE" ]]; then
-		delete_pref "WorkflowResetSuperAfterCompletion"
-		delete_pref_main "WorkflowResetSuperAfterCompletionNow"
-	elif [[ "${workflow_reset_super_after_completion_option}" == "TRUE" ]] || [[ $(get_pref "WorkflowResetSuperAfterCompletion") == "TRUE" ]]; then
-		log_super "Status: Workflow reset super after completion is active. All local (non-managed and non-authentication) preferences will be deleted after workflow completion."
-		workflow_reset_super_after_completion_active="TRUE"
-		set_pref "WorkflowResetSuperAfterCompletion" "TRUE"
-	fi
-	[[ "${workflow_restart_validate_active}" != "TRUE" ]] && set_pref_main "MacLastStartup" "${mac_last_startup}"
-	
-	# Apple silicon authentication and workflow validations.
-	[[ "${mac_cpu_architecture}" == "arm64" ]] && manage_authentication_options
-	manage_workflow_options
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file after startup validation: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2> /dev/null)"
-	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n "${super_alternate_plist}" ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Alternate preference file after startup validation: ${super_alternate_plist}:\n$(defaults read "${super_alternate_plist}" 2> /dev/null)"
-	
 	# If the macOS Setup Assistant is incomplete, or the ${schedule_deferred_start_file} is not found, or the admin is only making alternate configuration changes then the workflow should automatically defer or exit.
 	if [[ ! -f "${APPLE_SETUP_DONE_FILE}" ]] || { [[ -n "${schedule_deferred_start_file}" ]] && [[ ! -f "${schedule_deferred_start_file}" ]]; } || [[ "${config_edit_main_option}" == "TRUE" ]] || [[ -n "${config_edit_option}" ]] || [[ -n "${config_delete_option}" ]] || [[ "${config_delete_all_option}" == "TRUE" ]]; then
 		{ [[ "${config_delete_reset_workflow}" == "TRUE" ]] && [[ "${verbose_mode}" == "TRUE" ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Calling reset_workflow() function."
@@ -4162,6 +4130,58 @@ workflow_startup() {
 		fi
 		exit_clean
 	fi
+	
+	# Initial preparation for various workflow modes. This enforces a hierarchy of workflows as follows: Restart Validate > Install Now > Scheduled Installation > Only Download > Default Workflow.
+	[[ "${test_mode}" == "TRUE" ]] && log_super "Status: Test mode active with ${test_mode_timeout_seconds} second timeout."
+	if [[ $(get_pref "WorkflowRestartValidate") == "TRUE" ]]; then
+		log_super "Status: Restart validation workflow active."
+		workflow_restart_validate_active="TRUE"
+	elif [[ "${workflow_install_now}" == "TRUE" ]]; then
+		log_super "Status: Install now workflow active."
+		workflow_install_now_active="TRUE"
+		[[ $(echo "${display_unmovable}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_unmovable_status="TRUE"
+		[[ $(echo "${display_hide_background}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_hide_background_status="TRUE"
+		[[ $(echo "${display_silently}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_silently_status="TRUE"
+		[[ $(echo "${display_hide_progress_bar}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_hide_progress_bar_status="TRUE"
+		[[ $(echo "${display_notifications_centered}" | grep -c 'INSTALLNOW') -gt 0 ]] && display_notifications_centered_status="TRUE"
+		if [[ "${current_user_account_name}" != "FALSE" ]]; then
+			notification_install_now_start
+			if [[ "${test_mode}" == "TRUE" ]]; then
+				log_super "Test Mode: Pausing ${test_mode_timeout_seconds} seconds for the install now start notification..."
+				sleep "${test_mode_timeout_seconds}"
+			fi
+		fi
+		if [[ $(get_pref "WorkflowScheduledInstall") == "TRUE" ]]; then
+			log_super "Warning: Removing previously scheduled installation workflow due to current install now workflow."
+			delete_pref_main "WorkflowScheduledInstall"
+		fi
+	elif [[ $(get_pref "WorkflowScheduledInstall") =~ ${REGEX_DATE_HOURS_MINUTES} ]]; then
+		workflow_scheduled_install=$(get_pref "WorkflowScheduledInstall")
+		log_super "Status: Previously scheduled installation workflow active for: ${workflow_scheduled_install}"
+		workflow_scheduled_install_active="TRUE"
+	elif [[ "${workflow_only_download}" == "TRUE" ]]; then
+		log_super "Status: Only download workflow active."
+		workflow_only_download_active="TRUE"
+	fi
+	{ [[ "${workflow_only_download_active}" != "TRUE" ]] && [[ -n "${install_jamf_policy_triggers}" ]]; } && log_super "Status: Jamf Pro Policy triggers: ${install_jamf_policy_triggers}"
+	[[ "${install_jamf_policy_triggers_without_restarting}" == "TRUE" ]] && log_super "Warning: Install Jamf Pro Policy Triggers without restarting is enabled, this computer will run Jamf Pro Policies even if there is no macOS update or upgrade available."
+	[[ "${workflow_restart_without_updates}" == "TRUE" ]] && log_super "Warning: Restart without updates workflow is enabled, this computer will restart even if there is no macOS update or upgrade available."
+	workflow_reset_super_after_completion_active="FALSE"
+	if [[ "${workflow_reset_super_after_completion_option}" == "FALSE" ]]; then
+		delete_pref "WorkflowResetSuperAfterCompletion"
+		delete_pref_main "WorkflowResetSuperAfterCompletionNow"
+	elif [[ "${workflow_reset_super_after_completion_option}" == "TRUE" ]] || [[ $(get_pref "WorkflowResetSuperAfterCompletion") == "TRUE" ]]; then
+		log_super "Status: Workflow reset super after completion is active. All local (non-managed and non-authentication) preferences will be deleted after workflow completion."
+		workflow_reset_super_after_completion_active="TRUE"
+		set_pref "WorkflowResetSuperAfterCompletion" "TRUE"
+	fi
+	[[ "${workflow_restart_validate_active}" != "TRUE" ]] && set_pref_main "MacLastStartup" "${mac_last_startup}"
+	
+	# Apple silicon authentication and workflow validations.
+	[[ "${mac_cpu_architecture}" == "arm64" ]] && manage_authentication_options
+	manage_workflow_options
+	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Main preference file after startup validation: ${SUPER_MAIN_PLIST}:\n$(defaults read "${SUPER_MAIN_PLIST}" 2> /dev/null)"
+	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n "${super_alternate_plist}" ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Alternate preference file after startup validation: ${super_alternate_plist}:\n$(defaults read "${super_alternate_plist}" 2> /dev/null)"
 	
 	# If super is running via Jamf, then restart via LaunchDaemon to release the jamf parent process.
 	if [[ "${parent_process_is_jamf}" == "TRUE" ]]; then
@@ -5833,7 +5853,7 @@ check_user_focus() {
 		plutil_response=$(plutil -extract data.0.storeAssertionRecords.0.assertionDetails.assertionDetailsModeIdentifier raw -o - "/Users/${current_user_account_name}/Library/DoNotDisturb/DB/Assertions.json" 2>&1)
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: plutil_response is: ${plutil_response}"
 		if [[ $(echo "${plutil_response}" | grep -c 'permission') -gt 0 ]]; then
-			log_super "Warning: Unable to determine user Focus mode becaucse the process that started super doesn't have Full Disk Access permissions."
+			log_super "Warning: Unable to determine user Focus mode because the process that started super doesn't have Full Disk Access permissions."
 		elif [[ $(echo "${plutil_response}" | grep -c 'com.apple.') -gt 0 ]]; then
 			log_super "Status: Focus or Do Not Disturb enabled for current user: ${current_user_account_name}."
 			user_focus_active="TRUE"
@@ -6215,40 +6235,52 @@ kick_softwareupdated() {
 get_mdmclient_list() {
 	mdmclient_available="FALSE"
 	mdmclient_list="FALSE"
-	log_super "mdmclient: Waiting for available updates listing..."
+	local get_mdmclient_list_log
 	
-	# Background the mdmclient list process and send to ${MDMCLIENT_LIST_LOG}.
-	/usr/libexec/mdmclient AvailableOSUpdates > "${MDMCLIENT_LIST_LOG}" 2>&1 &
-	local get_mdmclient_list_pid
-	get_mdmclient_list_pid="$!"
+	if [[ -z "${MDMCLIENT_LIST_DEBUG_LOG}" ]]; then # Background the mdmclient list process and send to ${MDMCLIENT_LIST_LOG}.
+		get_mdmclient_list_log="${MDMCLIENT_LIST_LOG}"
+		log_super "mdmclient: Waiting for available updates listing..."
+		/usr/libexec/mdmclient AvailableOSUpdates > "${get_mdmclient_list_log}" 2>&1 &
+		local get_mdmclient_list_pid
+		get_mdmclient_list_pid="$!"
+	else # Use static debug mdmclient-list.log from ${MDMCLIENT_LIST_DEBUG_LOG}.
+		[[ ! -e "${MDMCLIENT_LIST_DEBUG_LOG}" ]] && log_super "Error: Unable to locate debug mdmclient-list.log at: ${MDMCLIENT_LIST_DEBUG_LOG}" && exit_error
+		get_mdmclient_list_log="${MDMCLIENT_LIST_DEBUG_LOG}"
+		log_super "mdmclient: Debug mode using static updates listing from: ${get_mdmclient_list_log}"
+	fi
 	
-	# Watch ${MDMCLIENT_LIST_LOG} while waiting for the mdmclient list process to complete. Note this while read loop has a timeout based on ${TIMEOUT_START_SECONDS}.
-	get_mdmclient_list_error="TRUE"
-	get_mdmclient_list_timeout="TRUE"
-	local get_mdmclient_list_timeout_seconds
-	get_mdmclient_list_timeout_seconds="${TIMEOUT_START_SECONDS}"
-	while read -t "${get_mdmclient_list_timeout_seconds}" -r log_line; do
-		# log_super "Debug Mode: Function ${FUNCNAME[0]}: log_line is:\n${log_line}"
-		if [[ $(echo "${log_line}" | grep -c 'Available updates') -gt 0 ]]; then
-			get_mdmclient_list_error="FALSE"
-			get_mdmclient_list_timeout="FALSE"
-			wait "${get_mdmclient_list_pid}"
-			break
-		fi
-	done < <(tail -n1 -F "${MDMCLIENT_LIST_LOG}")
+	# Watch ${get_mdmclient_list_log} while waiting for the mdmclient list process to complete. Note this while read loop has a timeout based on ${TIMEOUT_START_SECONDS}.
+	if [[ -z "${MDMCLIENT_LIST_DEBUG_LOG}" ]]; then
+		get_mdmclient_list_error="TRUE"
+		get_mdmclient_list_timeout="TRUE"
+		local get_mdmclient_list_timeout_seconds
+		get_mdmclient_list_timeout_seconds="${TIMEOUT_START_SECONDS}"
+		while read -t "${get_mdmclient_list_timeout_seconds}" -r log_line; do
+			# log_super "Debug Mode: Function ${FUNCNAME[0]}: log_line is:\n${log_line}"
+			if [[ $(echo "${log_line}" | grep -c 'Available updates') -gt 0 ]]; then
+				get_mdmclient_list_error="FALSE"
+				get_mdmclient_list_timeout="FALSE"
+				wait "${get_mdmclient_list_pid}"
+				break
+			fi
+		done < <(tail -n1 -F "${get_mdmclient_list_log}")
+	else
+		get_mdmclient_list_error="FALSE"
+		get_mdmclient_list_timeout="FALSE"
+	fi
 	
 	# If the mdmclient list completed, then collect information.
 	if [[ "${get_mdmclient_list_error}" == "FALSE" ]] && [[ "${get_mdmclient_list_timeout}" == "FALSE" ]]; then
-		mdmclient_list=$(sed -e '/^Available updates/q' < "${MDMCLIENT_LIST_LOG}")
-		set_pref_main "MDMClientListChecksum" "$(md5 -q "${MDMCLIENT_LIST_LOG}" 2> /dev/null)"
+		mdmclient_list=$(sed -e '/^Available updates/q' < "${get_mdmclient_list_log}")
+		[[ -z "${MDMCLIENT_LIST_DEBUG_LOG}" ]] && set_pref_main "MDMClientListChecksum" "$(md5 -q "${get_mdmclient_list_log}" 2> /dev/null)"
 		if [[ $(echo "${mdmclient_list}" | grep -c 'OS Update Item') -gt 0 ]]; then
 			mdmclient_available="TRUE"
-			set_pref_main "MDMClientAvailableCache" "TRUE"
+			[[ -z "${MDMCLIENT_LIST_DEBUG_LOG}" ]] && set_pref_main "MDMClientAvailableCache" "TRUE"
 		else
-			set_pref_main "MDMClientAvailableCache" "FALSE"
+			[[ -z "${MDMCLIENT_LIST_DEBUG_LOG}" ]] && set_pref_main "MDMClientAvailableCache" "FALSE"
 		fi
 	else # mdmclient list failures.
-		[[ "${get_mdmclient_list_error}" == "TRUE" ]] && log_super "mdmclient Error: Apple update listing failed, check ${MDMCLIENT_LIST_LOG} for more detail."
+		[[ "${get_mdmclient_list_error}" == "TRUE" ]] && log_super "mdmclient Error: Apple update listing failed, check ${get_mdmclient_list_log} for more detail."
 		[[ "${get_mdmclient_list_timeout}" == "TRUE" ]] && log_super "mdmclient Error: Apple update listing failed to complete, as indicated by no progress after waiting for ${get_mdmclient_list_timeout_seconds} seconds."
 		kill -9 "${get_mdmclient_list_pid}" > /dev/null 2>&1
 	fi
@@ -6262,44 +6294,56 @@ get_mdmclient_list() {
 # This also sets ${get_macos_installers_list_error} and ${get_macos_installers_list_timeout}.
 get_macos_installers_list() {
 	macos_installers_list="FALSE"
+	local get_macos_installers_list_log
 	
-	# Background the mist-cli list process and send to ${MACOS_INSTALLERS_LIST_LOG}.
-	local get_macos_installers_list_pid
-	if [[ "${macos_beta_program}" == "FALSE" ]]; then
-		"${MIST_CLI_BINARY}" list installer --output-type csv --no-ansi --compatible >"${MACOS_INSTALLERS_LIST_LOG}" 2>&1 &
-		get_macos_installers_list_pid="$!"
-	else # macOS beta workflow.
-		"${MIST_CLI_BINARY}" list installer --output-type csv --no-ansi --compatible --include-betas >"${MACOS_INSTALLERS_LIST_LOG}" 2>&1 &
-		get_macos_installers_list_pid="$!"
+	if [[ -z "${MACOS_INSTALLERS_LIST_DEBUG_LOG}" ]]; then # Background the mist-cli list process and send to ${MACOS_INSTALLERS_LIST_LOG}.
+		get_macos_installers_list_log="${MACOS_INSTALLERS_LIST_LOG}"
+		local get_macos_installers_list_pid
+		if [[ "${macos_beta_program}" == "FALSE" ]]; then
+			"${MIST_CLI_BINARY}" list installer --output-type csv --no-ansi --compatible >"${get_macos_installers_list_log}" 2>&1 &
+			get_macos_installers_list_pid="$!"
+		else # macOS beta workflow.
+			"${MIST_CLI_BINARY}" list installer --output-type csv --no-ansi --compatible --include-betas >"${get_macos_installers_list_log}" 2>&1 &
+			get_macos_installers_list_pid="$!"
+		fi
+	else # Use static debug macos-installers-list.log from ${MACOS_INSTALLERS_LIST_DEBUG_LOG}.
+		[[ ! -e "${MACOS_INSTALLERS_LIST_DEBUG_LOG}" ]] && log_super "Error: Unable to locate debug macos-installers-list.log at: ${MACOS_INSTALLERS_LIST_DEBUG_LOG}" && exit_error
+		get_macos_installers_list_log="${MACOS_INSTALLERS_LIST_DEBUG_LOG}"
+		log_super "mist-cli: Debug mode using static updates listing from: ${get_macos_installers_list_log}"
 	fi
 	
-	# Watch ${MACOS_INSTALLERS_LIST_LOG} while waiting for the mist-cli list process to complete. Note this while read loop has a timeout based on ${TIMEOUT_START_SECONDS}.
-	get_macos_installers_list_error="TRUE"
-	get_macos_installers_list_timeout="TRUE"
-	local get_macos_installers_list_timeout_seconds
-	get_macos_installers_list_timeout_seconds="${TIMEOUT_START_SECONDS}"
-	while read -t "${get_macos_installers_list_timeout_seconds}" -r log_line; do
-		# log_super "Debug Mode: Function ${FUNCNAME[0]}: log_line is:\n${log_line}"
-		if [[ $(echo "${log_line}" | grep -c 'SEARCH') -gt 0 ]]; then
-			log_super "mist-cli: Waiting for macOS installers listing..."
-		elif [[ $(echo "${log_line}" | grep -c 'Found 0') -gt 0 ]]; then
-			get_macos_installers_list_timeout="FALSE"
-			wait "${get_macos_installers_list_pid}"
-			break
-		elif [[ $(echo "${log_line}" | grep -c 'Found') -gt 0 ]]; then
-			get_macos_installers_list_error="FALSE"
-			get_macos_installers_list_timeout="FALSE"
-			wait "${get_macos_installers_list_pid}"
-			break
-		fi
-	done < <(tail -n1 -F "${MACOS_INSTALLERS_LIST_LOG}")
+	# Watch ${get_macos_installers_list_log} while waiting for the mist-cli list process to complete. Note this while read loop has a timeout based on ${TIMEOUT_START_SECONDS}.
+	if [[ -z "${MACOS_INSTALLERS_LIST_DEBUG_LOG}" ]]; then
+		get_macos_installers_list_error="TRUE"
+		get_macos_installers_list_timeout="TRUE"
+		local get_macos_installers_list_timeout_seconds
+		get_macos_installers_list_timeout_seconds="${TIMEOUT_START_SECONDS}"
+		while read -t "${get_macos_installers_list_timeout_seconds}" -r log_line; do
+			# log_super "Debug Mode: Function ${FUNCNAME[0]}: log_line is:\n${log_line}"
+			if [[ $(echo "${log_line}" | grep -c 'SEARCH') -gt 0 ]]; then
+				log_super "mist-cli: Waiting for macOS installers listing..."
+			elif [[ $(echo "${log_line}" | grep -c 'Found 0') -gt 0 ]]; then
+				get_macos_installers_list_timeout="FALSE"
+				wait "${get_macos_installers_list_pid}"
+				break
+			elif [[ $(echo "${log_line}" | grep -c 'Found') -gt 0 ]]; then
+				get_macos_installers_list_error="FALSE"
+				get_macos_installers_list_timeout="FALSE"
+				wait "${get_macos_installers_list_pid}"
+				break
+			fi
+		done < <(tail -n1 -F "${get_macos_installers_list_log}")
+	else
+		get_macos_installers_list_error="FALSE"
+		get_macos_installers_list_timeout="FALSE"
+	fi
 	
 	# If the mist-cli list completed, then collect information.
 	if [[ "${get_macos_installers_list_error}" == "FALSE" ]] && [[ "${get_macos_installers_list_timeout}" == "FALSE" ]]; then
-		macos_installers_list=$(sed -e '1,/^Identifier/d' -e '/^$/d' < "${MACOS_INSTALLERS_LIST_LOG}")
-		set_pref_main "MacOSInstallersListChecksum" "$(md5 -q "${MACOS_INSTALLERS_LIST_LOG}" 2> /dev/null)"
+		macos_installers_list=$(sed -e '1,/^Identifier/d' -e '/^$/d' < "${get_macos_installers_list_log}")
+		[[ -z "${MACOS_INSTALLERS_LIST_DEBUG_LOG}" ]] && set_pref_main "MacOSInstallersListChecksum" "$(md5 -q "${get_macos_installers_list_log}" 2> /dev/null)"
 	else
-		[[ "${get_macos_installers_list_error}" == "TRUE" ]] && log_super "mist-cli Error: macOS installers listing failed, check ${MACOS_INSTALLERS_LIST_LOG} for more detail."
+		[[ "${get_macos_installers_list_error}" == "TRUE" ]] && log_super "mist-cli Error: macOS installers listing failed, check ${get_macos_installers_list_log} for more detail."
 		[[ "${get_macos_installers_list_timeout}" == "TRUE" ]] && log_super "mist-cli Error: macOS installers listing failed to complete, as indicated by no progress after waiting for ${get_macos_installers_list_timeout_seconds} seconds."
 		kill -9 "${get_macos_installers_list_pid}" > /dev/null 2>&1
 	fi
@@ -6312,42 +6356,54 @@ get_macos_installers_list() {
 # This also sets ${get_msu_list_error} and ${get_msu_list_timeout}.
 get_msu_list() {
 	msu_list="FALSE"
-	log_super "softwareupdate: Waiting for available updates listing..."
+	local get_msu_list_log
 	
-	# Background the softwareupdate checking process and send to ${MSU_LIST_LOG}.
-	sudo -u root softwareupdate --list > "${MSU_LIST_LOG}" 2>&1 &
-	local get_msu_list_pid
-	get_msu_list_pid="$!"
+	if [[ -z "${MSU_LIST_DEBUG_LOG}" ]]; then # Background the softwareupdate checking process and send to ${MSU_LIST_LOG}.
+		get_msu_list_log="${MSU_LIST_LOG}"
+		log_super "softwareupdate: Waiting for available updates listing..."
+		sudo -u root softwareupdate --list > "${get_msu_list_log}" 2>&1 &
+		local get_msu_list_pid
+		get_msu_list_pid="$!"
+	else # Use static debug msu-list.log from ${MSU_LIST_DEBUG_LOG}.
+		[[ ! -e "${MSU_LIST_DEBUG_LOG}" ]] && log_super "Error: Unable to locate debug msu-list.log at: ${MSU_LIST_DEBUG_LOG}" && exit_error
+		get_msu_list_log="${MSU_LIST_DEBUG_LOG}"
+		log_super "softwareupdate: Debug mode using static updates listing from: ${get_msu_list_log}"
+	fi
 	
-	# Watch ${MSU_LIST_LOG} while waiting for the softwareupdate list process to complete. Note this while read loop has a timeout based on ${TIMEOUT_START_SECONDS}.
-	get_msu_list_error="TRUE"
-	get_msu_list_timeout="TRUE"
-	local get_msu_list_timeout_seconds
-	get_msu_list_timeout_seconds="${TIMEOUT_START_SECONDS}"
-	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: get_msu_list_timeout is: ${get_msu_list_timeout}"
-	while read -t "${get_msu_list_timeout_seconds}" -r log_line; do
-		# log_super "Debug Mode: Function ${FUNCNAME[0]}: log_line is:\n${log_line}"
-		if [[ $(echo "${log_line}" | grep -c "Can’t connect") -gt 0 ]] || [[ $(echo "${log_line}" | grep -c "Couldn't communicate") -gt 0 ]]; then
-			break
-		elif [[ $(echo "${log_line}" | grep -c 'Software Update found') -gt 0 ]]; then
-			get_msu_list_error="FALSE"
-			get_msu_list_timeout="FALSE"
-			wait "${get_msu_list_pid}"
-			break
-		elif [[ $(echo "${log_line}" | grep -c 'No new software available.') -gt 0 ]]; then
-			get_msu_list_error="FALSE"
-			get_msu_list_timeout="FALSE"
-			wait "${get_msu_list_pid}"
-			break
-		fi
-	done < <(tail -n1 -F "${MSU_LIST_LOG}")
+	# Watch ${get_msu_list_log} while waiting for the softwareupdate list process to complete. Note this while read loop has a timeout based on ${TIMEOUT_START_SECONDS}.
+	if [[ -z "${MSU_LIST_DEBUG_LOG}" ]]; then
+		get_msu_list_error="TRUE"
+		get_msu_list_timeout="TRUE"
+		local get_msu_list_timeout_seconds
+		get_msu_list_timeout_seconds="${TIMEOUT_START_SECONDS}"
+		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: get_msu_list_timeout is: ${get_msu_list_timeout}"
+		while read -t "${get_msu_list_timeout_seconds}" -r log_line; do
+			# log_super "Debug Mode: Function ${FUNCNAME[0]}: log_line is:\n${log_line}"
+			if [[ $(echo "${log_line}" | grep -c "Can’t connect") -gt 0 ]] || [[ $(echo "${log_line}" | grep -c "Couldn't communicate") -gt 0 ]]; then
+				break
+			elif [[ $(echo "${log_line}" | grep -c 'Software Update found') -gt 0 ]]; then
+				get_msu_list_error="FALSE"
+				get_msu_list_timeout="FALSE"
+				wait "${get_msu_list_pid}"
+				break
+			elif [[ $(echo "${log_line}" | grep -c 'No new software available.') -gt 0 ]]; then
+				get_msu_list_error="FALSE"
+				get_msu_list_timeout="FALSE"
+				wait "${get_msu_list_pid}"
+				break
+			fi
+		done < <(tail -n1 -F "${get_msu_list_log}")
+	else
+		get_msu_list_error="FALSE"
+		get_msu_list_timeout="FALSE"
+	fi
 	
 	# If the softwareupdate list completed, then collect information.
 	if [[ "${get_msu_list_error}" == "FALSE" ]] && [[ "${get_msu_list_timeout}" == "FALSE" ]]; then
-		msu_list=$(<"${MSU_LIST_LOG}")
-		set_pref_main "MSUListChecksum" "$(md5 -q "${MSU_LIST_LOG}" 2> /dev/null)"
+		msu_list=$(<"${get_msu_list_log}")
+		[[ -z "${MSU_LIST_DEBUG_LOG}" ]] && set_pref_main "MSUListChecksum" "$(md5 -q "${get_msu_list_log}" 2> /dev/null)"
 	else # softwareupdate list failures.
-		[[ "${get_msu_list_error}" == "TRUE" ]] && log_super "softwareupdate Error: macOS software update listing failed, check ${MSU_LIST_LOG} for more detail."
+		[[ "${get_msu_list_error}" == "TRUE" ]] && log_super "softwareupdate Error: macOS software update listing failed, check ${get_msu_list_log} for more detail."
 		[[ "${get_msu_list_timeout}" == "TRUE" ]] && log_super "softwareupdate Error: macOS software update listing failed to complete, as indicated by no progress after waiting for ${get_msu_list_timeout_seconds} seconds."
 		kill -9 "${get_msu_list_pid}" > /dev/null 2>&1
 	fi
@@ -6376,6 +6432,7 @@ workflow_check_software_status() {
 	workflow_check_software_status_error="FALSE"
 	
 	# First check caches to see if a full check can be avoided.
+	{ [[ -n "${MDMCLIENT_LIST_DEBUG_LOG}" ]] || [[ -n "${MACOS_INSTALLERS_LIST_DEBUG_LOG}" ]] || [[ -n "${MSU_LIST_DEBUG_LOG}" ]]; } && check_software_status_required="TRUE"
 	[[ "${check_software_status_required}" != "TRUE" ]] && check_software_update_status_cached
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: check_software_status_required is: ${check_software_status_required}"
 	
@@ -6449,7 +6506,7 @@ workflow_check_software_status() {
 	# If (no errors) no installable updates then report any macOS security updates (that can't be installed programmatically) and then exit this function.
 	if [[ "${workflow_check_software_status_error}" == "FALSE" ]] && [[ ${#mdmclient_macos_msu_array[@]} -eq 0 ]] && [[ ${#mdmclient_macos_installer_array[@]} -eq 0 ]] && [[ ${#mdmclient_non_system_array[@]} -eq 0 ]]; then
 		if [[ ${#mdmclient_security_array[@]} -gt 0 ]]; then
-			[[ "${msu_automatic_security_updates}" == "TRUE" ]] && log_super "Status: The following security updates are currently available and they should be installed soon via automatic macOS software udpate:"
+			[[ "${msu_automatic_security_updates}" == "TRUE" ]] && log_super "Status: The following security updates are currently available and they should be installed soon via automatic macOS software update:"
 			[[ "${msu_automatic_security_updates}" == "FALSE" ]] && log_super "Warning: The following security updates are available but due to macOS software update settings are not allowed for installation:"
 			for array_index in "${!mdmclient_security_array[@]}"; do
 				[[ "${msu_automatic_security_updates}" == "TRUE" ]] && log_super "Status: Security update $((array_index + 1)) of ${#mdmclient_security_array[@]} is: ${mdmclient_security_array[array_index]}"
@@ -6485,7 +6542,7 @@ workflow_check_software_status() {
 		fi
 		
 		# If there is a ${msu_list} then parse items to appropriate variables.
-		if [[ "${msu_list}" == "FALSE" ]]; then
+		if [[ "${msu_list}" == "FALSE" ]] || [[ $(echo "${msu_list}" | grep -c 'No new software available.') -gt 0 ]]; then
 			log_super "Error: Checking for macOS software update listing did not return any available updates."
 			workflow_check_software_status_error="TRUE"
 		else
@@ -7388,7 +7445,7 @@ workflow_download_macos() {
 	if [[ "${macos_installer_download_required}" == "TRUE" ]] || [[ "${macos_msu_download_required}" == "TRUE" ]]; then
 		# If a macOS automatic download should be possible then automatically defer.
 		if [[ "${macos_msu_automatic_download_deferral}" == "TRUE" ]]; then
-			# First check for a vareity of reasons why the automatic download deferral should be ignored.
+			# First check for a variety of reasons why the automatic download deferral should be ignored.
 			local ignore_macos_msu_automatic_download_deferral
 			ignore_macos_msu_automatic_download_deferral="FALSE"
 			[[ "${macos_msu_download_error}" == "TRUE" ]] && log_super "Warning: Ignoring automatic macOS minor update download deferral due an error with the previously downloaded macOS update." && ignore_macos_msu_automatic_download_deferral="TRUE"
@@ -10358,15 +10415,8 @@ dialog_user_choice() {
 		dialog_user_schedule # This function includes all workflows to facilitate user schedule selection.
 		;;
 	4 | 137 | 255)
-		if [[ -n "${deferral_timer_menu_minutes}" ]]; then
-			dialog_response="$(echo "${dialog_response}" | sed -e 's/[^0-9]*//g' | tr -d '\n')"
-			deferral_timer_minutes="${deferral_timer_menu_minutes_array[${dialog_response}]}"
-			log_super "Status: Display timeout automatically chose to defer for ${deferral_timer_minutes} minutes."
-			log_status "Pending: Display timeout automatically chose to defer for ${deferral_timer_minutes} minutes."
-		else
-			log_super "Status: Display timeout automatically chose to defer, using the default deferral of ${deferral_timer_minutes} minutes."
-			log_status "Pending: Display timeout automatically chose to defer, using the default deferral of ${deferral_timer_minutes} minutes."
-		fi
+		log_super "Status: Display timeout automatically chose to defer, using the default deferral of ${deferral_timer_minutes} minutes."
+		log_status "Pending: Display timeout automatically chose to defer, using the default deferral of ${deferral_timer_minutes} minutes."
 		log_metrics "Dialog User Choice Timeout Deferral: Workflow Elapsed Time" "WorkflowTargetTimestamp"
 		set_auto_launch_deferral
 		;;
@@ -11178,6 +11228,7 @@ main() {
 	fi
 	
 	# This is the main logic for starting all installation or restart workflows.
+	{ [[ -n "${MDMCLIENT_LIST_DEBUG_LOG}" ]] || [[ -n "${MACOS_INSTALLERS_LIST_DEBUG_LOG}" ]] || [[ -n "${MSU_LIST_DEBUG_LOG}" ]]; } && interactive_interrupt
 	if [[ "${workflow_target}" != "FALSE" ]]; then
 		workflow_time_epoch=$(date +%s)
 		[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Setting new workflow_time_epoch to: ${workflow_time_epoch}"
