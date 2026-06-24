@@ -8,9 +8,9 @@
 # shellcheck disable=SC2012,SC2024,SC2207
 
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
-SUPER_VERSION="5.1.0-rc6"
+SUPER_VERSION="5.1.0"
 readonly SUPER_VERSION
-SUPER_DATE="2026/06/18"
+SUPER_DATE="2026/06/24"
 readonly SUPER_DATE
 SUPER_USER_AGENT="super/${SUPER_VERSION} $(curl --version | head -1 | sed -e 's/curl /curl\//')"
 readonly SUPER_USER_AGENT
@@ -58,8 +58,6 @@ show_usage() {
   Workflow Options:
   [--workflow-install-now]  [--workflow-install-now-off]
   [--workflow-only-download]  [--workflow-only-download-off]
-  [--workflow-ignore-managed-deferrals]
-  [--workflow-ignore-managed-deferrals-off]
   [--workflow-require-active-user]  [--workflow-require-active-user-off]
   [--workflow-restart-without-updates]  [--workflow-restart-without-updates-off]
   [--workflow-disable-update-check]  [--workflow-disable-update-check-off]
@@ -238,8 +236,8 @@ show_usage() {
   <key>ConfigTempOverride</key> <true/> | <false/>
   <key>AuthAskUserToSavePassword</key> <true/> | <false/>
   <key>AuthJamfCustomURL</key> <string>URL</string>
-  <key>AuthJamfComputerID</key> <string>$JSSID</string>
-  <key>AuthJamfManagementID</key> <string>$MANAGEMENTID</string>
+  <key>AuthJamfComputerID</key> <string>\$JSSID</string>
+  <key>AuthJamfManagementID</key> <string>\$MANAGEMENTID</string>
   <key>AuthCredentialFailoverToUser</key> <true/> | <false/>
   <key>AuthMDMFailoverToUser</key>
   <string>ALWAYS,DIALOG,DEADLINE,SCHEDULED,INSTALLNOW,ERROR</string>
@@ -1747,7 +1745,7 @@ manage_parameter_options() {
 	
 	# Validate ${deferral_timer_focus_option} input and if valid set the ${deferral_timer_focus_minutes} parameter. If there is no ${deferral_timer_focus_minutes} then set it to ${deferral_timer_minutes}.
 	deferral_timer_focus_minutes=$(get_pref_managed "DeferralTimerFocus")
-	if [[ "${deferral_timer_focus_minutes}" == "X" ]] || { [[ -z $deferral_timer_focus_minutes ]] && [[ "${deferral_timer_focus_option}" == "X" ]]; } then
+	if [[ "${deferral_timer_focus_minutes}" == "X" ]] || { [[ -z $deferral_timer_focus_minutes ]] && [[ "${deferral_timer_focus_option}" == "X" ]]; }; then
 		delete_pref "DeferralTimerFocus"
 		unset deferral_timer_focus_minutes
 	elif [[ -z $deferral_timer_focus_minutes ]] && [[ -n "${deferral_timer_focus_option}" ]]; then
@@ -11228,6 +11226,8 @@ main() {
 	fi
 	
 	# This is the main logic for starting all installation or restart workflows.
+	# For advanced debugging while running super from the command line, remove the comment # from the next line to activate an interactive interrupt that will pause the workflow before downloading/installing/restarting the target.
+	# interactive_interrupt
 	{ [[ -n "${MDMCLIENT_LIST_DEBUG_LOG}" ]] || [[ -n "${MACOS_INSTALLERS_LIST_DEBUG_LOG}" ]] || [[ -n "${MSU_LIST_DEBUG_LOG}" ]]; } && interactive_interrupt
 	if [[ "${workflow_target}" != "FALSE" ]]; then
 		workflow_time_epoch=$(date +%s)
