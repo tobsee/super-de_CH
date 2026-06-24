@@ -10,17 +10,17 @@ by Kevin M. White
 
 ## Introduction
 
-S.U.P.E.R.M.A.N. (or just `super`) is an open source script that provides administrators with a comprehensive solution to encourage and enforce [macOS minor updates, macOS major upgrades,](https://support.apple.com/guide/deployment/about-software-updates-depc4c80847a) [Jamf Pro Policies,](https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-current/page/Policies.html) or enforced system restarts. Deployed using a single script and optional configuration profiles, `super` creates a background agent (aka LaunchDaemon) that ensures updates are applied with the least user interference possible. Further, `super` offers a broad range of options for customizable dialogs, notifications, schedules, deferrals, and deadlines. In other words, `super` makes the macOS update experience better for both users and administrators.
+S.U.P.E.R.M.A.N. (or just `super`) is an open-source script that provides administrators with a comprehensive solution to encourage and enforce [macOS minor updates, macOS major upgrades,](https://support.apple.com/guide/deployment/about-software-updates-depc4c80847a) [Jamf Pro Policies,](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Policies), or enforced system restarts. Deployed using a single script and optional configuration profiles, `super` creates a background agent (aka LaunchDaemon) that ensures updates are applied with the least user interference possible. Further, `super` offers a broad range of options for customizable dialogs, notifications, schedules, deferrals, and deadlines. In other words, `super` makes the macOS update experience better for both users and administrators.
 
 ## Screenshots
 
-__A `super` macOS update dialog with multiple options__
+__The `super` macOS update dialog with multiple customizations__
 
-![The `super` macOS update dialog](https://github.com/Macjutsu/super/blob/main/Example-Screenshots/Example-macOS-Update-Dialog.png)
+![The `super` macOS update dialog with multiple customizations](https://github.com/Macjutsu/super/blob/main/Example-Screenshots/5.1.x/Example-macOS-Update-Dialog.png)
 
-__A `super` macOS update restart notification__
+__The `super` macOS update restart notification__
 
-![The `super` macOS update restart notification](https://github.com/Macjutsu/super/blob/main/Example-Screenshots/Example-macOS-Restart-Notification.png)
+![The `super` macOS update restart notification](https://github.com/Macjutsu/super/blob/main/Example-Screenshots/5.1.x/Example-macOS-Restart-Notification.png)
 
 ## Learn More
 
