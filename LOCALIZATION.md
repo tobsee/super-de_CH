@@ -15,7 +15,7 @@ problem: we never touch logic, the version string, or anything else — only tho
 
 | Path | Purpose |
 |------|---------|
-| `vendor/super` | Pristine upstream `super`. **Never edit by hand.** |
+| `vendor/super` | Pristine upstream `super`. |
 | `de.map` | `English<TAB>German` pairs — the source of truth. |
 | `extract-strings.sh` | Prints the translatable strings from any `super` script. |
 | `localize.sh` | Builds `build/super-de` from `vendor/super` + `de.map`. |
