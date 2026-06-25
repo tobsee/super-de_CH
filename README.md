@@ -1,31 +1,47 @@
-# S.U.P.E.R.M.A.N.
+# super-de_CH — German (Swiss High German) localization of SUPER
 
-### Software Update Policy Enforcement (with) Recursive Messaging And Notification
+This repository maintains a **German-localized build** of
+[**S.U.P.E.R.M.A.N. (`super`)**](https://github.com/Macjutsu/super) by Kevin M. White — the
+open-source macOS software-update enforcement tool for Mac admins.
 
-S.U.P.E.R.M.A.N. optimizes the macOS update experience.
+> This is an unofficial localization fork. For the tool itself, its documentation, options,
+> screenshots, and support, see the **upstream project: https://github.com/Macjutsu/super**
+> (and its [Wiki](https://github.com/Macjutsu/super/wiki)). All credit for `super` goes there.
 
-by Kevin M. White
+## What this repo does
 
-### Please use [the newest version of `super`](https://github.com/Macjutsu/super/releases) for the best experience when using or upgrading to macOS 26 Tahoe. Older versions of `super` are not tested against macOS 26 Tahoe.
+`super` keeps **all of its user-facing text in one place** — the `set_display_strings_language()`
+function — as simple `display_string_*="..."` assignments. This repo translates that text into
+**Swiss High German** (Schweizer Hochdeutsch: always `ss`, never `ß`) **without ever hand-editing
+the upstream script**.
 
-## Introduction
+Instead:
 
-S.U.P.E.R.M.A.N. (or just `super`) is an open-source script that provides administrators with a comprehensive solution to encourage and enforce [macOS minor updates, macOS major upgrades,](https://support.apple.com/guide/deployment/about-software-updates-depc4c80847a) [Jamf Pro Policies,](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Policies), or enforced system restarts. Deployed using a single script and optional configuration profiles, `super` creates a background agent (aka LaunchDaemon) that ensures updates are applied with the least user interference possible. Further, `super` offers a broad range of options for customizable dialogs, notifications, schedules, deferrals, and deadlines. In other words, `super` makes the macOS update experience better for both users and administrators.
+- Pristine upstream `super` lives untouched in [`vendor/super`](vendor/super).
+- All German lives in one map file, [`de.map`](de.map) (`English<TAB>German` pairs).
+- [`localize.sh`](localize.sh) regenerates the localized script into `build/super-de`, and reports
+  exactly which strings are **new** (need translating) or **changed upstream** (need re-mapping).
 
-## Screenshots
+This keeps the fork trivially re-syncable with each new `super` release: drop in the new upstream
+file, re-run the build, translate only what changed.
 
-__The `super` macOS update dialog with multiple customizations__
+**Currently localized `super` version: 5.1.0.**
 
-![The `super` macOS update dialog with multiple customizations](https://github.com/Macjutsu/super/blob/main/Example-Screenshots/5.1.x/Example-macOS-Update-Dialog.png)
+## Usage
 
-__The `super` macOS update restart notification__
+```sh
+git show vX.Y.Z:super > vendor/super   # X.Y.Z = the upstream release you want
+./localize.sh vendor/super de.map      # -> build/super-de
+```
 
-![The `super` macOS update restart notification](https://github.com/Macjutsu/super/blob/main/Example-Screenshots/5.1.x/Example-macOS-Restart-Notification.png)
+Deploy `build/super-de` instead of the upstream `super`. The localized build differs from upstream
+**only** in the translated `display_string_*` lines — the version string, logic, and everything else
+are byte-for-byte identical.
 
-## Learn More
+See **[LOCALIZATION.md](LOCALIZATION.md)** for the full format reference and the per-release update
+procedure.
 
-Please visit the [S.U.P.E.R.M.A.N. Wiki](https://github.com/Macjutsu/super/wiki) for detailed documentation!
+## License
 
-Detailed `super` version progress can be found in the [Change Log](https://github.com/Macjutsu/super/blob/main/CHANGELOG.md).
-
-You can also join the conversation at the [Mac Admins Foundation Slack](https://www.macadmins.org) in channel [#super](https://macadmins.slack.com/archives/C03LKQ8EN2C).
+`super` is distributed under the Apache License 2.0 (see [`LICENSE`](LICENSE)); this localization fork
+follows the same terms. `super` is the work of Kevin M. White and the SUPERMAN project.

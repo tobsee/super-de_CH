@@ -1,0 +1,5 @@
+# Generated localized output — rebuild with ./localize.sh, never commit.
+build/
+
+# macOS cruft
+.DS_Store
