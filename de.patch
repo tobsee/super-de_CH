@@ -1,0 +1,34 @@
+# de.patch — out-of-function line patches for super-de (applied by localize.sh after de.map).
+#
+# de.map can only translate display_string_*="..." literals INSIDE the function
+# set_display_strings_language(). Some German-relevant fixes live OUTSIDE that function and
+# cannot be reached that way:
+#   - the date/time *format* constants (set_defaults()), and
+#   - forcing a German locale (LC_TIME) on the user-facing `date` calls so weekday/month names
+#     render in German under the root LaunchDaemon's C/POSIX locale (otherwise: "Tue", "Jun").
+#
+# Format:  old<TAB>new   (one pair per line; blank lines and lines starting with # are ignored).
+#   * Matching is on the line with its leading indentation STRIPPED, by exact string equality.
+#   * Each `old` MUST match exactly one line in vendor/super; localize.sh errors out otherwise
+#     (so an upstream change that moves/edits these lines is caught, never silently skipped).
+#   * The matched line's original leading indentation is preserved on replacement.
+#   * Store the inner text only — do NOT include leading tabs in either side.
+
+# --- Swiss German date/time display formats (set_defaults()) ---------------------------------
+# Date: weekday-abbrev + day. + full month  ->  "Di. 30. Juni"  (fixes English + US order).
+DISPLAY_STRING_FORMAT_DATE="%a %b %d" # Formatting options can be found in the man page for the date command.	DISPLAY_STRING_FORMAT_DATE="%a %d. %b" # Formatting options can be found in the man page for the date command.
+# Time: 24-hour with "Uhr"  ->  "19:50 Uhr"  (fixes 12h AM/PM). No leading-space artifact from %H.
+DISPLAY_STRING_FORMAT_TIME="%l:%M %p" # Formatting options can be found in the man page for the date command.	DISPLAY_STRING_FORMAT_TIME="%H:%M Uhr" # Formatting options can be found in the man page for the date command.
+
+# --- Force German locale on the user-facing date formatting calls ----------------------------
+# Without LC_TIME the root daemon's C locale yields English weekday/month even with the formats above.
+# Only the dialog-facing calls that use the display format constants are patched; the internal
+# +%H:%M midnight checks and the +"%a %b %d %T" log lines are deliberately left untouched.
+display_string_schedule_zero_date_only_date=$(date -r "${schedule_zero_date_epoch}" "+${DISPLAY_STRING_FORMAT_DATE}")	display_string_schedule_zero_date_only_date=$(LC_TIME=de_CH.UTF-8 date -r "${schedule_zero_date_epoch}" "+${DISPLAY_STRING_FORMAT_DATE}")
+display_string_schedule_zero_date_only_time=$(date -r "${schedule_zero_date_epoch}" "+${DISPLAY_STRING_FORMAT_TIME}" | sed 's/^ *//g')	display_string_schedule_zero_date_only_time=$(LC_TIME=de_CH.UTF-8 date -r "${schedule_zero_date_epoch}" "+${DISPLAY_STRING_FORMAT_TIME}" | sed 's/^ *//g')
+display_string_scheduled_install_only_date=$(date -r "${workflow_scheduled_install_epoch}" "+${DISPLAY_STRING_FORMAT_DATE}")	display_string_scheduled_install_only_date=$(LC_TIME=de_CH.UTF-8 date -r "${workflow_scheduled_install_epoch}" "+${DISPLAY_STRING_FORMAT_DATE}")
+display_string_scheduled_install_only_time=$(date -r "${workflow_scheduled_install_epoch}" "+${DISPLAY_STRING_FORMAT_TIME}" | sed 's/^ *//g')	display_string_scheduled_install_only_time=$(LC_TIME=de_CH.UTF-8 date -r "${workflow_scheduled_install_epoch}" "+${DISPLAY_STRING_FORMAT_TIME}" | sed 's/^ *//g')
+display_string_deadline_only_date=$(date -r "${deadline_epoch}" "+${DISPLAY_STRING_FORMAT_DATE}")	display_string_deadline_only_date=$(LC_TIME=de_CH.UTF-8 date -r "${deadline_epoch}" "+${DISPLAY_STRING_FORMAT_DATE}")
+display_string_deadline_only_time=$(date -r "${deadline_epoch}" "+${DISPLAY_STRING_FORMAT_TIME}" | sed 's/^ *//g')	display_string_deadline_only_time=$(LC_TIME=de_CH.UTF-8 date -r "${deadline_epoch}" "+${DISPLAY_STRING_FORMAT_TIME}" | sed 's/^ *//g')
+display_string_defer_button="${display_string_defer_future_button} $(date -r "${deferral_timer_epoch_temp}" "+${DISPLAY_STRING_FORMAT_DATE}")"	display_string_defer_button="${display_string_defer_future_button} $(LC_TIME=de_CH.UTF-8 date -r "${deferral_timer_epoch_temp}" "+${DISPLAY_STRING_FORMAT_DATE}")"
+deferral_timer_menu_display_array[array_index]="${display_string_defer_future_button} $(date -r "${deferral_timer_epoch_temp}" "+${DISPLAY_STRING_FORMAT_DATE}")"	deferral_timer_menu_display_array[array_index]="${display_string_defer_future_button} $(LC_TIME=de_CH.UTF-8 date -r "${deferral_timer_epoch_temp}" "+${DISPLAY_STRING_FORMAT_DATE}")"

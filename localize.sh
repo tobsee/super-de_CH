@@ -20,18 +20,21 @@ cd "$(dirname "$0")"
 
 VENDOR="${1:-vendor/super}"
 MAP="${2:-de.map}"
+PATCH="${3:-de.patch}"
 OUT="build/super-de"
 
 [[ -f "${VENDOR}" ]] || { echo "ERROR: vendor script not found: ${VENDOR}" >&2; exit 2; }
 [[ -f "${MAP}"    ]] || { echo "ERROR: map not found: ${MAP}" >&2; exit 2; }
+# PATCH is optional: absent file = no out-of-function patches to apply.
 
 mkdir -p "$(dirname "${OUT}")"
 
-VENDOR="${VENDOR}" MAP="${MAP}" OUT="${OUT}" python3 - <<'PY'
+VENDOR="${VENDOR}" MAP="${MAP}" PATCH="${PATCH}" OUT="${OUT}" python3 - <<'PY'
 import os, sys, collections
 
 vendor = os.environ["VENDOR"]
 mappath = os.environ["MAP"]
+patchpath = os.environ["PATCH"]
 out = os.environ["OUT"]
 
 # --- load de.map: english_raw -> german_raw -------------------------------------------------
@@ -61,6 +64,26 @@ with open(mappath, encoding="utf-8") as f:
         if pending_todo:
             todo_keys.add(eng)
         pending_todo = False
+
+# --- load de.patch: out-of-function line replacements ---------------------------------------
+# These reach lines that de.map cannot (date/time format constants and forced LC_TIME on the
+# user-facing `date` calls), which live OUTSIDE set_display_strings_language(). Matching is on the
+# leading-whitespace-stripped line by exact equality; original indentation is preserved. Each `old`
+# must match at least one line (some date-assembly lines recur verbatim at several call sites — all
+# occurrences are patched); ZERO matches is reported and fails the build (D. below), so an upstream
+# edit that moves/renames a target line is caught rather than silently dropped.
+patches = []   # list of (lineno_in_patch, old_stripped, new_stripped)
+if os.path.exists(patchpath):
+    with open(patchpath, encoding="utf-8") as f:
+        for n, line in enumerate(f, 1):
+            line = line.rstrip("\n")
+            if not line or line.lstrip().startswith("#"):
+                continue
+            old, sep, new = line.partition("\t")
+            if not sep:
+                print(f"ERROR: {patchpath}:{n}: missing TAB separator", file=sys.stderr)
+                sys.exit(2)
+            patches.append((n, old, new))
 
 # --- scan vendor for translatable assignments (mirrors extract-strings.sh scoping) ----------
 def is_computed(val):
@@ -104,6 +127,27 @@ for line in lines:
                     continue
     new_lines.append(line)
 
+# --- apply de.patch: out-of-function line replacements --------------------------------------
+import re as _re
+_indent_re = _re.compile(r'^([ \t]*)(.*)$')
+patched = []        # (old_stripped, new_stripped) actually applied
+patch_misses = []   # (lineno, old_stripped) that matched no line
+for pn, old, new in patches:
+    hit_indices = []
+    for i, ln in enumerate(new_lines):
+        body = ln.rstrip("\n")
+        m = _indent_re.match(body)
+        if m and m.group(2) == old:
+            hit_indices.append(i)
+    if not hit_indices:
+        patch_misses.append((pn, old))
+        continue
+    for i in hit_indices:
+        ln = new_lines[i]
+        indent = _indent_re.match(ln.rstrip("\n")).group(1)
+        new_lines[i] = f'{indent}{new}\n' if ln.endswith("\n") else f'{indent}{new}'
+    patched.append((old, new))
+
 # --- categories -----------------------------------------------------------------------------
 # B. Stale: map English keys that do not appear among vendor's translatable strings.
 stale = [e for e in mapping if e not in vendor_strings]
@@ -125,6 +169,9 @@ for s in stale:
 print(f"C. Untranslated : {len(untranslated)} vendor string(s) needing German.")
 for s in untranslated:
     print(f"     TODO : \"{show(s)}\"")
+print(f"D. Patched      : {len(patched)} out-of-function line(s) replaced; {len(patch_misses)} miss(es).")
+for pn, s in patch_misses:
+    print(f"     MISS ({patchpath}:{pn}): \"{show(s)}\"")
 
 # --- write output atomically ----------------------------------------------------------------
 tmp = out + ".tmp"
@@ -134,9 +181,9 @@ os.chmod(tmp, 0o755)
 os.replace(tmp, out)
 print(f"\nWrote {out}")
 
-if stale or untranslated:
-    print("\nResult: NOT CLEAN — resolve STALE (re-map English) and/or UNTRANSLATED (add German) in de.map.",
+if stale or untranslated or patch_misses:
+    print("\nResult: NOT CLEAN — resolve STALE/UNTRANSLATED in de.map and/or MISS (re-anchor) in de.patch.",
           file=sys.stderr)
     sys.exit(1)
-print("\nResult: CLEAN — all vendor strings translated, no stale map entries.")
+print("\nResult: CLEAN — all vendor strings translated, all patches applied, no stale entries.")
 PY

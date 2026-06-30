@@ -16,9 +16,10 @@ problem: we never touch logic, the version string, or anything else — only tho
 | Path | Purpose |
 |------|---------|
 | `vendor/super` | Pristine upstream `super`. |
-| `de.map` | `English<TAB>German` pairs — the source of truth. |
+| `de.map` | `English<TAB>German` pairs — the source of truth for translatable strings. |
+| `de.patch` | `old<TAB>new` line replacements for German-relevant text **outside** the translatable function (date/time formats, forced locale). See below. |
 | `extract-strings.sh` | Prints the translatable strings from any `super` script. |
-| `localize.sh` | Builds `build/super-de` from `vendor/super` + `de.map`. |
+| `localize.sh` | Builds `build/super-de` from `vendor/super` + `de.map` + `de.patch`. |
 | `build/super-de` | Generated output (git-ignored). Deploy this. |
 
 ## `de.map` format
@@ -37,6 +38,31 @@ English text	German text
 - A `# TODO translate (...)` comment immediately **above** an entry marks it as not-yet-translated;
   `localize.sh` reports it as UNTRANSLATED until you replace the German side and remove the marker.
 
+## `de.patch` format (out-of-function fixes)
+
+`de.map` can only reach `display_string_*="..."` literals **inside** `set_display_strings_language()`.
+A few German-relevant things live elsewhere in the script and `de.map` cannot touch them:
+
+- the **date/time format constants** in `set_defaults()` (`DISPLAY_STRING_FORMAT_DATE`/`_TIME`), and
+- forcing a **German locale** (`LC_TIME=de_CH.UTF-8`) on the user-facing `date` calls — under the root
+  LaunchDaemon's C/POSIX locale, `%a`/`%b` otherwise render in English ("Tue", "Jun").
+
+`de.patch` handles these as literal line replacements:
+
+```
+old line text	new line text
+```
+
+- One pair per line, **TAB**-separated; `#`/blank lines ignored. Like `de.map`, **store the line with
+  its leading indentation stripped** — matching is on the leading-whitespace-stripped line by exact
+  equality, and the matched line's original indentation is reused on replacement.
+- The `old` side must match upstream **verbatim** (minus indentation). It may match **more than one**
+  line — some date-assembly lines recur identically at several call sites, and **all** are patched.
+- If an `old` matches **zero** lines (upstream moved/edited it), `localize.sh` reports it as a `MISS`
+  under category **D** and fails the build — same change-detection guarantee as STALE for `de.map`.
+- Swiss German conventions used here: date `"%a %d. %b"` → `Di. 30. Juni` (fixes English + US order);
+  time `"%H:%M Uhr"` → `19:50 Uhr` (fixes 12h AM/PM).
+
 ## Per-release update procedure
 
 1. **Refresh upstream into `vendor/super`:**
@@ -46,28 +72,37 @@ English text	German text
    ```
 2. **Build:**
    ```sh
-   ./localize.sh vendor/super de.map
+   ./localize.sh vendor/super de.map de.patch
    ```
 3. **If it reports `STALE` entries** — that English text changed (or was removed) upstream.
    Update those `de.map` lines' **English** side to the new upstream wording (keep/adjust the German).
 4. **If it reports `UNTRANSLATED` entries** — new strings were added upstream (or are still TODO).
    Add `English<TAB>German` lines to `de.map` (or fill in the German on existing TODO placeholders).
    Tip: `./extract-strings.sh vendor/super` lists every current string with its variable name.
-5. **Re-run** `./localize.sh vendor/super de.map` until it prints `Result: CLEAN` (exit 0).
-6. **Verify:**
+5. **If it reports `MISS` entries (category D)** — an upstream line targeted by `de.patch` moved or
+   changed. Re-anchor that `de.patch` `old` side to the new upstream wording (keep the `new` intent).
+6. **Re-run** until it prints `Result: CLEAN` (exit 0).
+7. **Verify:**
    ```sh
    bash -n build/super-de                  # syntax OK
-   diff vendor/super build/super-de        # only display_string_* lines should differ
+   # only display_string_* lines AND the de.patch targets (formats + LC_TIME) should differ:
+   diff vendor/super build/super-de | grep '^[<>]' \
+     | grep -v 'display_string_\|DISPLAY_STRING_FORMAT_\|LC_TIME=de_CH'   # -> empty
    grep -m1 SUPER_VERSION= build/super-de   # version must match upstream, untouched
+   # date rendering under a clean (daemon-like) locale, LC_TIME honored:
+   EP=$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-06-30 19:50:00" +%s)
+   env -i LC_TIME=de_CH.UTF-8 /bin/date -r "$EP" "+%a %d. %b %H:%M Uhr"   # -> Di. 30. Juni 19:50 Uhr
    ```
-7. **Commit** `vendor/super` + `de.map` (never `build/`). **Deploy** `build/super-de`.
+8. **Commit** `vendor/super` + `de.map` + `de.patch` (never `build/`). **Deploy** `build/super-de`.
 
 ## Constraints (do not violate)
 
 - Never hand-edit `vendor/super`.
-- German lives only in `de.map` — never in the script.
-- The English side of every map entry is exact, verbatim upstream text.
-- The only diffs between `vendor/super` and `build/super-de` are translated `display_string_*` lines;
-  the version string and all logic are preserved.
+- German lives only in `de.map` (strings) and `de.patch` (out-of-function format/locale lines) — never
+  in the script directly.
+- The English/`old` side of every `de.map` and `de.patch` entry is exact, verbatim upstream text.
+- The only diffs between `vendor/super` and `build/super-de` are translated `display_string_*` lines and
+  the `de.patch` targets (the two format constants + the `LC_TIME` prefixes); the version string and all
+  other logic are preserved.
 - If a string's purpose is ambiguous, leave it untranslated and flag it — a wrong silent replacement in
   an update-enforcement tool is worse than an untranslated string.
