@@ -182,8 +182,7 @@ os.replace(tmp, out)
 print(f"\nWrote {out}")
 
 if stale or untranslated or patch_misses:
-    print("\nResult: NOT CLEAN — resolve STALE/UNTRANSLATED in de.map and/or MISS (re-anchor) in de.patch.",
-          file=sys.stderr)
+    print("\nResult: NOT CLEAN", file=sys.stderr)
     sys.exit(1)
-print("\nResult: CLEAN — all vendor strings translated, all patches applied, no stale entries.")
+print("\nResult: CLEAN")
 PY

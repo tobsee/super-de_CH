@@ -72,7 +72,7 @@ jobs:
           # Preserve the executable bit, then swap in the new upstream file.
           chmod --reference=vendor/super vendor/super.new || chmod 755 vendor/super.new
           mv vendor/super.new vendor/super
-          OLD_VER="$(git show HEAD:vendor/super | grep -m1 '^SUPER_VERSION=' | cut -d'"' -f2)"
+          OLD_VER="$(grep -m1 '^SUPER_VERSION=' <(git show HEAD:vendor/super) | cut -d'"' -f2)"
           NEW_VER="$(grep -m1 '^SUPER_VERSION=' vendor/super | cut -d'"' -f2)"
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "old_version=$OLD_VER" >> "$GITHUB_OUTPUT"
@@ -112,17 +112,12 @@ jobs:
 
           # Build the PR body in a file (avoids heredoc/quoting pitfalls with the report).
           {
-            printf '%s\n\n' "Automated sync of the upstream \`super\` script only (not the whole repo)."
-            printf -- '- **Upstream:** [\`%s\`](https://github.com/%s)\n' "$UPSTREAM" "$UPSTREAM"
-            printf -- '- **Ref pulled:** \`%s\`\n' "$REF"
-            printf -- '- **SUPER_VERSION:** \`%s\` -> \`%s\`\n\n' "$OLD_VER" "$NEW_VER"
-            printf '%s\n\n' "Only \`vendor/super\` changed. Next steps for the maintainer (see \`LOCALIZATION.md\`):"
-            printf '%s\n' "1. Resolve any **STALE** / **UNTRANSLATED** entries in \`de.map\` and any **MISS** in \`de.patch\`."
-            printf '%s\n' "2. Re-run \`./localize.sh vendor/super de.map de.patch\` until it prints \`Result: CLEAN\`."
-            printf '%s\n\n' "3. Update the \"Currently localized version\" note in \`README.md\`."
-            printf '%s\n\n' "<details><summary><code>./localize.sh</code> report against the new upstream</summary>"
-            printf '```\n%s\n```\n\n' "$REPORT"
-            printf '%s\n' "</details>"
+            printf -- '- **Upstream:** [`%s`](https://github.com/%s)\n' "$UPSTREAM" "$UPSTREAM"
+            printf -- '- **Ref:** `%s`\n' "$REF"
+            printf -- '- **SUPER_VERSION:** `%s` -> `%s`\n\n' "$OLD_VER" "$NEW_VER"
+            printf '%s\n' '```'
+            printf '%s\n' "$REPORT"
+            printf '%s\n' '```'
           } > pr-body.md
 
           if [ "$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')" = '0' ]; then
