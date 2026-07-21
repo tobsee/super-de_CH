@@ -72,7 +72,7 @@ jobs:
           # Preserve the executable bit, then swap in the new upstream file.
           chmod --reference=vendor/super vendor/super.new || chmod 755 vendor/super.new
           mv vendor/super.new vendor/super
-          OLD_VER="$(git show HEAD:vendor/super | grep -m1 '^SUPER_VERSION=' | cut -d'"' -f2)"
+          OLD_VER="$(grep -m1 '^SUPER_VERSION=' <(git show HEAD:vendor/super) | cut -d'"' -f2)"
           NEW_VER="$(grep -m1 '^SUPER_VERSION=' vendor/super | cut -d'"' -f2)"
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "old_version=$OLD_VER" >> "$GITHUB_OUTPUT"
