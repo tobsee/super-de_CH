@@ -112,9 +112,9 @@ jobs:
 
           # Build the PR body in a file (avoids heredoc/quoting pitfalls with the report).
           {
-            printf -- '- **Upstream:** [\`%s\`](https://github.com/%s)\n' "$UPSTREAM" "$UPSTREAM"
-            printf -- '- **Ref:** \`%s\`\n' "$REF"
-            printf -- '- **SUPER_VERSION:** \`%s\` -> \`%s\`\n\n' "$OLD_VER" "$NEW_VER"
+            printf -- '- **Upstream:** [`%s`](https://github.com/%s)\n' "$UPSTREAM" "$UPSTREAM"
+            printf -- '- **Ref:** `%s`\n' "$REF"
+            printf -- '- **SUPER_VERSION:** `%s` -> `%s`\n\n' "$OLD_VER" "$NEW_VER"
             printf '%s\n' '```'
             printf '%s\n' "$REPORT"
             printf '%s\n' '```'
