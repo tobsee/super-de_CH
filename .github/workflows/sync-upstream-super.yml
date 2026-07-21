@@ -1,0 +1,135 @@
+name: Sync upstream super
+
+# Pulls ONLY the single upstream `super` script from the latest Macjutsu/super
+# release into vendor/super — never the whole upstream repo. When it changes,
+# it opens a PR (and, so the maintainer sees exactly what to do next, runs
+# ./localize.sh and drops its STALE / UNTRANSLATED / MISS report into the PR body).
+#
+# Note: opening a PR with the built-in GITHUB_TOKEN requires
+# Settings -> Actions -> General -> "Allow GitHub Actions to create and approve
+# pull requests" to be enabled for this repo.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'   # Mondays 06:17 UTC
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Upstream tag/ref to sync (blank = latest release)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream-super
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: Macjutsu/super
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve upstream ref
+        id: ref
+        run: |
+          set -euo pipefail
+          REF='${{ github.event.inputs.ref }}'
+          if [ -z "$REF" ]; then
+            REF="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
+          fi
+          echo "Upstream ref: $REF"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch upstream super
+        run: |
+          set -euo pipefail
+          gh api "repos/$UPSTREAM/contents/super?ref=${{ steps.ref.outputs.ref }}" \
+            -H 'Accept: application/vnd.github.raw' > vendor/super.new
+          # Sanity check: must actually be the super script, not an error blob.
+          head -5 vendor/super.new | grep -q 'S.U.P.E.R.M.A.N.' \
+            || { echo 'Downloaded file does not look like super; aborting.' >&2; exit 1; }
+
+      - name: Compare
+        id: diff
+        run: |
+          set -euo pipefail
+          if cmp -s vendor/super.new vendor/super; then
+            echo 'vendor/super already matches ${{ steps.ref.outputs.ref }}; nothing to do.'
+            rm -f vendor/super.new
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Preserve the executable bit, then swap in the new upstream file.
+          chmod --reference=vendor/super vendor/super.new || chmod 755 vendor/super.new
+          mv vendor/super.new vendor/super
+          OLD_VER="$(git show HEAD:vendor/super | grep -m1 '^SUPER_VERSION=' | cut -d'"' -f2)"
+          NEW_VER="$(grep -m1 '^SUPER_VERSION=' vendor/super | cut -d'"' -f2)"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "old_version=$OLD_VER" >> "$GITHUB_OUTPUT"
+          echo "new_version=$NEW_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Localize report
+        id: localize
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -uo pipefail
+          # localize.sh exits non-zero when the new upstream introduced strings that
+          # still need translating — that's expected here and must NOT fail the job.
+          REPORT="$(./localize.sh vendor/super de.map de.patch 2>&1)" || true
+          echo "$REPORT"
+          {
+            echo 'report<<LOCALIZE_EOF'
+            echo "$REPORT"
+            echo 'LOCALIZE_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open pull request
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          REF: ${{ steps.ref.outputs.ref }}
+          OLD_VER: ${{ steps.diff.outputs.old_version }}
+          NEW_VER: ${{ steps.diff.outputs.new_version }}
+          REPORT: ${{ steps.localize.outputs.report }}
+        run: |
+          set -euo pipefail
+          BRANCH="upstream-sync/super-${REF}"
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B "$BRANCH"
+          git add vendor/super
+          git commit -m "vendor: sync upstream super ${REF} (SUPER_VERSION ${OLD_VER} -> ${NEW_VER})"
+          git push -f origin "$BRANCH"
+
+          # Build the PR body in a file (avoids heredoc/quoting pitfalls with the report).
+          {
+            printf '%s\n\n' "Automated sync of the upstream \`super\` script only (not the whole repo)."
+            printf -- '- **Upstream:** [\`%s\`](https://github.com/%s)\n' "$UPSTREAM" "$UPSTREAM"
+            printf -- '- **Ref pulled:** \`%s\`\n' "$REF"
+            printf -- '- **SUPER_VERSION:** \`%s\` -> \`%s\`\n\n' "$OLD_VER" "$NEW_VER"
+            printf '%s\n\n' "Only \`vendor/super\` changed. Next steps for the maintainer (see \`LOCALIZATION.md\`):"
+            printf '%s\n' "1. Resolve any **STALE** / **UNTRANSLATED** entries in \`de.map\` and any **MISS** in \`de.patch\`."
+            printf '%s\n' "2. Re-run \`./localize.sh vendor/super de.map de.patch\` until it prints \`Result: CLEAN\`."
+            printf '%s\n\n' "3. Update the \"Currently localized version\" note in \`README.md\`."
+            printf '%s\n\n' "<details><summary><code>./localize.sh</code> report against the new upstream</summary>"
+            printf '```\n%s\n```\n\n' "$REPORT"
+            printf '%s\n' "</details>"
+          } > pr-body.md
+
+          if [ "$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')" = '0' ]; then
+            gh pr create --head "$BRANCH" --base "${{ github.event.repository.default_branch }}" \
+              --title "Sync upstream super ${REF} (${NEW_VER})" --body-file pr-body.md
+          else
+            echo 'PR already open for '"$BRANCH"'; updated the branch in place.'
+            gh pr edit "$BRANCH" --body-file pr-body.md || true
+          fi
+          rm -f pr-body.md
