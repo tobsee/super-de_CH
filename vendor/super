@@ -8,9 +8,9 @@
 # shellcheck disable=SC2012,SC2024,SC2207
 
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
-SUPER_VERSION="5.1.1"
+SUPER_VERSION="5.1.2"
 readonly SUPER_VERSION
-SUPER_DATE="2026/07/21"
+SUPER_DATE="2026/09/15"
 readonly SUPER_DATE
 SUPER_USER_AGENT="super/${SUPER_VERSION} $(curl --version | head -1 | sed -e 's/curl /curl\//')"
 readonly SUPER_USER_AGENT
@@ -532,9 +532,9 @@ set_defaults() {
 	IBM_NOTIFIER_DOWNLOAD_URL="https://github.com/IBM/mac-ibm-notifications/releases/download/v-3.2.3-b-135/IBM.Notifier.zip"
 	readonly IBM_NOTIFIER_DOWNLOAD_URL
 	
-	# Target version for IBM Notifier.app:
-	IBM_NOTIFIER_TARGET_VERSION="3.2.3"
-	readonly IBM_NOTIFIER_TARGET_VERSION
+	# Target minimum version for IBM Notifier.app:
+	IBM_NOTIFIER_MINIMUM_VERSION="3.2.3"
+	readonly IBM_NOTIFIER_MINIMUM_VERSION
 	
 	# Path to the local IBM Notifier.app:
 	IBM_NOTIFIER_APP="${SUPER_FOLDER}/IBM Notifier.app"
@@ -550,9 +550,9 @@ set_defaults() {
 	MIST_CLI_DOWNLOAD_URL="https://github.com/ninxsoft/mist-cli/releases/download/v2.3/mist-cli.2.3.pkg"
 	readonly MIST_CLI_DOWNLOAD_URL
 	
-	# Target version for mist-cli:
-	MIST_CLI_TARGET_VERSION="2.3"
-	readonly MIST_CLI_TARGET_VERSION
+	# Target minimum version for mist-cli:
+	MIST_CLI_MINIMUM_VERSION="2.3"
+	readonly MIST_CLI_MINIMUM_VERSION
 	
 	# Path to the local mist-cli binary:
 	MIST_CLI_BINARY="/usr/local/bin/mist"
@@ -1552,22 +1552,22 @@ manage_parameter_options() {
 		set_pref "InstallMacOSMinorVersionTarget" "${install_macos_minor_version_target}"
 	fi
 	[[ -z "${install_macos_minor_version_target}" ]] && install_macos_minor_version_target=$(get_pref "InstallMacOSMinorVersionTarget")
-	{ [[ -n "${install_macos_minor_version_target}" ]] && [[ ! "${install_macos_minor_version_target}" =~ ${REGEX_MACOS_TARGET_VERSION} ]]; } && log_super "Parameter Error: The --install-macos-minor-version-target=number value must be a contemporary macOS version number (15.0 | 15.1 | 15.1.1)." && parameter_error="TRUE"
-	{ [[ -n "${install_macos_minor_version_target}" ]] && [[ $(echo "${install_macos_minor_version_target}" | grep -c '\.') -eq 0 ]]; } && log_super "Parameter Error: The --install-macos-minor-version-target=number value must inlucde macOS major and minor version numbers (15.0 | 15.1 | 15.1.1)." && parameter_error="TRUE"
+	{ [[ -n "${install_macos_minor_version_target}" ]] && [[ ! "${install_macos_minor_version_target}" =~ ${REGEX_MACOS_TARGET_VERSION} ]]; } && parameter_error="TRUE" && log_super "Parameter Error: The --install-macos-minor-version-target=number value must be a contemporary macOS version number (26.0 | 26.1 | 26.1.1)."
+	{ [[ -n "${install_macos_minor_version_target}" ]] && [[ $(echo "${install_macos_minor_version_target}" | grep -c '\.') -eq 0 ]]; } && parameter_error="TRUE" && log_super "Parameter Error: The --install-macos-minor-version-target=number value must inlucde macOS major and minor version numbers (26.0 | 26.1 | 26.1.1)."
 	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n "${install_macos_minor_version_target}" ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: install_macos_minor_version_target is: ${install_macos_minor_version_target}"
 	[[ -n "${install_macos_minor_version_target}" ]] && install_macos_minor_version_normalized_target=$(echo "${install_macos_minor_version_target}" | awk -F'.' '{printf "%02d%02d%02d", $1, $2, $3}')
 	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n $install_macos_minor_version_normalized_target ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: install_macos_minor_version_normalized_target is: ${install_macos_minor_version_normalized_target}"
 	
-	# Validate the ${install_macos_minor_updates} and ${install_macos_minor_version_normalized_target} as compared to the current macOS ${macos_version_normalized}.
+	# Validate the ${install_macos_minor_updates} and ${install_macos_minor_version_normalized_target} as compared to the current macOS ${macos_version_major} and ${macos_version_normalized}.
 	install_macos_minor_updates="TRUE"
 	if [[ -n $install_macos_minor_version_normalized_target ]] && [[ ${install_macos_minor_version_normalized_target:0:2} -gt $macos_version_major ]]; then
-		log_super "Parameter Warning: The --install-macos-minor-version-target=${install_macos_minor_version_target} option will be ignored as it represents a major upgrade comparted to the current ${macos_version_full}."
-		unset install_macos_minor_version_target
-		unset install_macos_minor_version_normalized_target
-	elif [[ -n $install_macos_minor_version_normalized_target ]] && [[ $install_macos_minor_version_normalized_target -le $macos_version_normalized ]]; then
-		[[ $install_macos_minor_version_normalized_target -lt $macos_version_normalized ]] && log_super "Parameter Warning: The --install-macos-minor-version-target=${install_macos_minor_version_target} option is less than currently running ${macos_version_full}. Disabling macOS minor update workflow."
-		[[ $install_macos_minor_version_normalized_target -eq $macos_version_normalized ]] && log_super "Status: The --install-macos-minor-version-target=${install_macos_minor_version_target} option is the same as current ${macos_version_full}. Disabling macOS minor update workflow."
-		install_macos_minor_updates="FALSE"
+		unset install_macos_minor_version_target && unset install_macos_minor_version_normalized_target && log_super "Parameter Warning: The --install-macos-minor-version-target=${install_macos_minor_version_target} option will be ignored because it's referencing a major upgrade version comparted to the current ${macos_version_full}."
+	elif [[ -n $install_macos_minor_version_normalized_target ]] && [[ ${install_macos_minor_version_normalized_target:0:2} -lt $macos_version_major ]]; then
+		install_macos_minor_updates="FALSE" && log_super "Parameter Warning: The --install-macos-minor-version-target=${install_macos_minor_version_target} option is referencing a previous major version compared to the current ${macos_version_full}, this will disable the macOS minor update workflow."
+	elif [[ -n $install_macos_minor_version_normalized_target ]]; then
+		[[ $(echo "${install_macos_minor_version_target}" | grep -o '\.' | wc -l | xargs) -eq 1 ]] && [[ ${install_macos_minor_version_normalized_target:0:4} -lt ${macos_version_normalized:0:4} ]] && install_macos_minor_updates="FALSE" && log_super "Status: The --install-macos-minor-version-target=${install_macos_minor_version_target} option is less than currently running ${macos_version_full}, this will disable the macOS minor update workflow."
+		[[ $(echo "${install_macos_minor_version_target}" | grep -o '\.' | wc -l | xargs) -eq 2 ]] && [[ $install_macos_minor_version_normalized_target -eq $macos_version_normalized ]] && install_macos_minor_updates="FALSE" && log_super "Status: The --install-macos-minor-version-target=${install_macos_minor_version_target} option is the same as current ${macos_version_full}, as such a macOS minor update is unecissary."
+		[[ $(echo "${install_macos_minor_version_target}" | grep -o '\.' | wc -l | xargs) -eq 2 ]] && [[ $install_macos_minor_version_normalized_target -lt $macos_version_normalized ]] && install_macos_minor_updates="FALSE" && log_super "Status: The --install-macos-minor-version-target=${install_macos_minor_version_target} option is less than currently running ${macos_version_full}, this will disable the macOS minor update workflow."
 	fi
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: install_macos_minor_updates is: ${install_macos_minor_updates}"
 	
@@ -1587,16 +1587,18 @@ manage_parameter_options() {
 		set_pref "InstallMacOSMajorVersionTarget" "${install_macos_major_version_target}"
 	fi
 	[[ -z "${install_macos_major_version_target}" ]] && install_macos_major_version_target=$(get_pref "InstallMacOSMajorVersionTarget")
-	{ [[ -n "${install_macos_major_version_target}" ]] && [[ ! "${install_macos_major_version_target}" =~ ${REGEX_MACOS_TARGET_VERSION} ]]; } && log_super "Parameter Error: The --install-macos-major-version-target=number value must be a contemporary macOS version number (15 | 15.1 | 15.1.1)." && parameter_error="TRUE"
+	{ [[ -n "${install_macos_major_version_target}" ]] && [[ ! "${install_macos_major_version_target}" =~ ${REGEX_MACOS_TARGET_VERSION} ]]; } && parameter_error="TRUE" && log_super "Parameter Error: The --install-macos-major-version-target=number value must be a contemporary macOS version number (27 | 27.1 | 27.1.1)."
 	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n "${install_macos_major_version_target}" ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: install_macos_major_version_target is: ${install_macos_major_version_target}"
 	[[ -n "${install_macos_major_version_target}" ]] && install_macos_major_version_normalized_target=$(echo "${install_macos_major_version_target}" | awk -F'.' '{printf "%02d%02d%02d", $1, $2, $3}')
 	{ [[ "${verbose_mode}" == "TRUE" ]] && [[ -n $install_macos_major_version_normalized_target ]]; } && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: install_macos_major_version_normalized_target is: ${install_macos_major_version_normalized_target}"
 	
-	# Validate the ${install_macos_major_upgrades} and ${install_macos_major_version_normalized_target} as compared to the current macOS ${macos_version_normalized}.
-	if [[ "${install_macos_major_upgrades}" == "TRUE" ]] && [[ -n $install_macos_major_version_normalized_target ]] && [[ $install_macos_major_version_normalized_target -le $macos_version_normalized ]]; then
-		[[ $install_macos_major_version_normalized_target -lt $macos_version_normalized ]] && log_super "Parameter Warning: The --install-macos-major-version-target=${install_macos_major_version_target} option is less than the currently running ${macos_version_full}. Disabling macOS major upgrade workflow."
-		[[ $install_macos_major_version_normalized_target -eq $macos_version_normalized ]] && log_super "Status: The --install-macos-major-version-target=${install_macos_major_version_target} option is the same as current ${macos_version_full}. Disabling macOS major upgrade workflow."
-		install_macos_major_upgrades="FALSE"
+	# Validate the ${install_macos_major_upgrades} and ${install_macos_major_version_normalized_target} as compared to the current macOS ${macos_version_major}.
+	if [[ "${install_macos_major_upgrades}" != "TRUE" ]] && [[ -n $install_macos_major_version_normalized_target ]]; then
+		unset install_macos_major_version_target && unset install_macos_major_version_normalized_target && log_super "Parameter Warning: The --install-macos-major-version-target=${install_macos_major_version_target} option will be ignored because because the --install-macos-major-upgrades option is not enabled."
+	elif [[ "${install_macos_major_upgrades}" == "TRUE" ]] && [[ -n $install_macos_major_version_normalized_target ]] && [[ ${install_macos_major_version_normalized_target:0:2} -lt $macos_version_major ]]; then
+		install_macos_major_upgrades="FALSE" && log_super "Parameter Warning: The --install-macos-major-version-target=${install_macos_major_version_target} option is referencing a previous major version compared to the current ${macos_version_full}, this will disable the macOS major upgrade workflow."
+	elif [[ "${install_macos_major_upgrades}" == "TRUE" ]] && [[ -n $install_macos_major_version_normalized_target ]] && [[ ${install_macos_major_version_normalized_target:0:2} -eq $macos_version_major ]]; then
+		install_macos_major_upgrades="FALSE" && log_super "Status: The --install-macos-major-version-target=${install_macos_major_version_target} option is the same major version as the current ${macos_version_full}, as such a macOS major upgrade is unecissary."
 	fi
 	[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: install_macos_major_upgrades is: ${install_macos_major_upgrades}"
 	
@@ -3373,10 +3375,7 @@ manage_workflow_options() {
 				[[ "${auth_service_account_saved}" == "TRUE" ]] && log_super "Status: macOS update/upgrade workflows automatically authenticated via super service account."
 				workflow_macos_auth="LOCAL"
 			elif [[ "${auth_jamf_client_saved}" == "TRUE" ]] || [[ "${auth_jamf_account_saved}" == "TRUE" ]]; then
-				if [[ $macos_version_normalized -ge 270000 ]]; then
-					[[ -n "${auth_mdm_failover_to_user}" ]] && log_super "Warning: macOS 27 and later does not support MDM software update commands, failing over to user authenticated workflow." && workflow_macos_auth="FAILOVER"
-					[[ -z "${auth_mdm_failover_to_user}" ]] && log_super "Error: macOS 27 and later does not support MDM software update commands. Use the --auth-mdm-failover-to-user option to allow for failover to user authenticated workflow." && workflow_auth_error="TRUE"
-				elif [[ $macos_version_normalized -ge 110300 ]]; then
+				if [[ $macos_version_normalized -ge 110300 ]]; then
 					[[ -n "${auth_mdm_failover_to_user}" ]] && log_super "Status: macOS update/upgrade workflows automatically authenticated via Jamf Pro API with --auth-mdm-failover-to-user=${auth_mdm_failover_to_user}."
 					[[ -z "${auth_mdm_failover_to_user}" ]] && log_super "Status: macOS update/upgrade workflows automatically authenticated via Jamf Pro API with no --auth-mdm-failover-to-user options."
 					workflow_macos_auth="JAMF"
@@ -3731,13 +3730,9 @@ EOLD
 # Download and install the IBM Notifier.app.
 get_ibm_notifier() {
 	log_super "Status: Attempting to download and install IBM Notifier.app..."
-	local previous_umask
-	previous_umask=$(umask)
-	umask 077
-	local temp_file
-	temp_file="$(mktemp).zip"
-	local download_response
-	download_response=$(curl --user-agent "${SUPER_USER_AGENT}" --location "${IBM_NOTIFIER_DOWNLOAD_URL}" --output "${temp_file}" 2>&1)
+	local previous_umask && previous_umask=$(umask) && umask 077
+	local temp_file && temp_file="$(mktemp).zip"
+	local download_response && download_response=$(curl --user-agent "${SUPER_USER_AGENT}" --location "${IBM_NOTIFIER_DOWNLOAD_URL}" --output "${temp_file}" 2>&1)
 	if [[ -f "${temp_file}" ]]; then
 		local unzip_response
 		unzip_response=$(unzip "${temp_file}" -d "${SUPER_FOLDER}/" 2>&1)
@@ -3759,15 +3754,13 @@ get_ibm_notifier() {
 # Check the IBM Notifier.app for validity.
 check_ibm_notifier() {
 	ibm_notifier_valid="FALSE"
-	local codesign_response
-	codesign_response=$(codesign --verify --verbose "${IBM_NOTIFIER_APP}" 2>&1)
+	local codesign_response && codesign_response=$(codesign --verify --verbose "${IBM_NOTIFIER_APP}" 2>&1)
 	if [[ $(echo "${codesign_response}" | grep -c 'valid on disk') -gt 0 ]]; then
-		local version_response
-		version_response=$(defaults read "${IBM_NOTIFIER_APP}/Contents/Info.plist" CFBundleShortVersionString)
-		if [[ "${IBM_NOTIFIER_TARGET_VERSION}" == "${version_response}" ]]; then
+		local version_response && version_response=$(defaults read "${IBM_NOTIFIER_APP}/Contents/Info.plist" CFBundleShortVersionString)
+		if [[ -n "${version_response}" ]] && [[ "$(printf '%s\n' "${IBM_NOTIFIER_MINIMUM_VERSION}" "${version_response}" | sort -V | head -n 1)" == "${IBM_NOTIFIER_MINIMUM_VERSION}" ]]; then
 			ibm_notifier_valid="TRUE"
 		else
-			log_super "Warning: IBM Notifier at path: ${IBM_NOTIFIER_APP} is version ${version_response}, this does not match target version ${IBM_NOTIFIER_TARGET_VERSION}."
+			log_super "Warning: IBM Notifier at path: ${IBM_NOTIFIER_APP} is version ${version_response}, this is below the minimum compatible version ${IBM_NOTIFIER_MINIMUM_VERSION}."
 		fi
 	else
 		log_super "Warning: unable validate signature for IBM Notifier at path: ${IBM_NOTIFIER_APP}."
@@ -3818,16 +3811,11 @@ get_display_icon() {
 # Download and install mist-cli.
 get_mist_cli() {
 	log_super "Status: Attempting to download and install mist-cli..."
-	local previous_umask
-	previous_umask=$(umask)
-	umask 077
-	local temp_file
-	temp_file="$(mktemp).pkg"
-	local download_response
-	download_response=$(curl --user-agent "${SUPER_USER_AGENT}" --location "${MIST_CLI_DOWNLOAD_URL}" --output "${temp_file}" 2>&1)
+	local previous_umask && previous_umask=$(umask) && umask 077
+	local temp_file && temp_file="$(mktemp).pkg"
+	local download_response && download_response=$(curl --user-agent "${SUPER_USER_AGENT}" --location "${MIST_CLI_DOWNLOAD_URL}" --output "${temp_file}" 2>&1)
 	if [[ -f "${temp_file}" ]]; then
-		local install_response
-		install_response=$(installer -verboseR -pkg "${temp_file}" -target / 2>&1)
+		local install_response && install_response=$(installer -verboseR -pkg "${temp_file}" -target / 2>&1)
 		if ! { [[ $(echo "${install_response}" | grep -c 'The software was successfully installed.') -gt 0 ]] || [[ $(echo "${install_response}" | grep -c 'The install was successful.') -gt 0 ]]; }; then
 			log_super "Error: Unable to install mist-cli."
 			[[ "${verbose_mode}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: install_response is:\n${install_response}"
@@ -3843,15 +3831,13 @@ get_mist_cli() {
 # Check mist-cli for validity.
 check_mist_cli() {
 	mist_cli_valid="FALSE"
-	local codesign_response
-	codesign_response=$(codesign --verify --verbose "${MIST_CLI_BINARY}" 2>&1)
+	local codesign_response && codesign_response=$(codesign --verify --verbose "${MIST_CLI_BINARY}" 2>&1)
 	if [[ $(echo "${codesign_response}" | grep -c 'valid on disk') -gt 0 ]]; then
-		local version_response
-		version_response=$("${MIST_CLI_BINARY}" --version | head -1 | awk '{print $1;}')
-		if [[ "${MIST_CLI_TARGET_VERSION}" == "${version_response}" ]]; then
+		local version_response && version_response=$("${MIST_CLI_BINARY}" --version | head -1 | awk '{print $1;}')
+		if [[ -n "${version_response}" ]] && [[ "$(printf '%s\n' "${MIST_CLI_MINIMUM_VERSION}" "${version_response}" | sort -V | head -n 1)" == "${MIST_CLI_MINIMUM_VERSION}" ]]; then
 			mist_cli_valid="TRUE"
 		else
-			log_super "Warning: mist-cli at path: ${MIST_CLI_BINARY} is version ${version_response}, this does not match target version ${MIST_CLI_TARGET_VERSION}."
+			log_super "Warning: mist-cli at path: ${MIST_CLI_BINARY} is version ${version_response}, this is below the minimum compatible version ${MIST_CLI_MINIMUM_VERSION}."
 		fi
 	else
 		log_super "Warning: unable validate signature for mist-cli at path: ${MIST_CLI_BINARY}."
@@ -3969,12 +3955,12 @@ workflow_startup() {
 	
 	# Make sure macOS meets the minimum requirement of macOS 11.
 	macos_version_major=$(sw_vers -productVersion | cut -d'.' -f1) # Expected output: 10, 11, 12
-	if [[ $macos_version_major -lt 11 ]]; then
+	if [[ $macos_version_major -lt 11 ]] || [[ $macos_version_major -gt 26 ]]; then
 		if [[ -d "${SUPER_FOLDER}" ]]; then
-			log_super "Exit: This computer is running macOS ${macos_version_major} and super requires macOS 11 Big Sur or newer."
+			log_super "Exit: This computer is running macOS ${macos_version_major}, super ${SUPER_VERSION} is only compatible with macOS 11 through macOS 26."
 			exit_error
 		else # super is not installed yet.
-			log_echo "Exit: This computer is running macOS ${macos_version_major} and super requires macOS 11 Big Sur or newer."
+			log_echo "Exit: This computer is running macOS ${macos_version_major}, super ${SUPER_VERSION} is only compatible with macOS 11 through macOS 26."
 			exit 1
 		fi
 	fi
